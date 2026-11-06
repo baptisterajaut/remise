@@ -21,13 +21,13 @@ Not sure which Mac you have? Open  menu → **About This Mac**. "Chip: Apple M�
 
 ## Install
 
+**Everything Remise needs comes with it**, on every system: Ghostscript, ImageMagick, FFmpeg, Pandoc, Tesseract's OCR and the rest are inside the app. Nothing else to install: the few tools that need something bigger (an AI model, LibreOffice…) offer to download it the first time you open them.
+
 ### Windows
 
 1. Double-click the `…setup.exe` you downloaded.
 2. Windows may show a blue box saying *"Windows protected your PC"*. The app isn't code-signed yet (signing costs money every year), and that is why the box appears. Click **More info**, then **Run anyway**.
 3. Follow the installer. Remise is then in your Start menu.
-
-Everything Remise needs comes with it on Windows.
 
 ### Mac
 
@@ -38,13 +38,6 @@ Everything Remise needs comes with it on Windows.
    - confirm with your password.
 
    You only do this once. On macOS 14 or older, you can instead right-click Remise → **Open** → **Open**.
-3. A few tools rely on free programs that can't be bundled on Mac: PDF tools such as compress and OCR, and some image tools. To get them all, install [Homebrew](https://brew.sh) and then run this in the Terminal app:
-
-   ```
-   brew install ghostscript tesseract imagemagick potrace
-   ```
-
-   Tools that still need something show up **striped** in the app. Hover over one to see what's missing.
 
 If macOS says Remise "is damaged and can't be opened", or that a tool "can't be opened", run this once in the Terminal. Nothing is damaged; this removes the "downloaded from the internet" flag that blocks unsigned apps:
 
@@ -56,13 +49,8 @@ xattr -dr com.apple.quarantine /Applications/Remise.app
 
 1. Make the file executable: right-click it → *Properties* → *Allow executing as program*. Or, in a terminal: `chmod +x Remise_*.AppImage`.
 2. Double-click it to run it.
-3. For the PDF, OCR and image tools, install these from your distribution:
 
-   ```
-   sudo apt install ghostscript tesseract-ocr imagemagick      # Debian, Ubuntu, Mint
-   sudo dnf install ghostscript tesseract ImageMagick          # Fedora
-   sudo pacman -S ghostscript tesseract imagemagick            # Arch
-   ```
+It runs on Ubuntu 22.04 or newer, Debian 12, Fedora 36 and other distributions of that age or newer.
 
 ## How to use it
 
@@ -99,21 +87,21 @@ A few more things to know:
 
 </details>
 
-A few tools use another free program that you install yourself. Until you do, the app shows them striped, and hovering tells you what to install.
+A few tools need something too big to put in every download. The first time you open one, its button says **Download** and how big it is. Press it once, and from then on that tool works offline like the others.
 
-| Tool | Needs |
+| Tool | Downloads, once |
 |---|---|
-| Remove background | [rembg](https://github.com/danielgatis/rembg) |
-| Transcribe | [Whisper](https://github.com/openai/whisper) |
-| Office to PDF | [LibreOffice](https://www.libreoffice.org/download/) |
-| PDF Studio (annotate, sign, fill forms) | [PdfCraft](https://github.com/storytold/pdfcraft) |
-| HTML to PDF, HTML to image | Google Chrome, Microsoft Edge or Chromium (Edge comes with Windows) |
+| Remove background | an AI model, 224 MB |
+| Transcribe | a speech model, 190 MB |
+| Office to PDF | LibreOffice, 300 to 376 MB |
+| PDF Studio (annotate, sign, fill forms) | [PdfCraft](https://github.com/storytold/pdfcraft), 115 to 129 MB |
+| HTML to PDF, HTML to image | Chromium, 105 to 128 MB, only on a Mac or Linux PC with no Chrome, Edge or Chromium |
 
 ## Questions
 
 **Is it really free?** Yes. Remise is open source under the MIT licence. The heavy lifting is done by long-standing free programs: Ghostscript, FFmpeg, ImageMagick, Pandoc, Tesseract, qpdf, 7-Zip and others.
 
-**Does anything get uploaded?** No. Files are read and written on your disk only. The *Video downloader* is the only tool that uses the internet, and it does so to fetch the video you asked for. It also updates itself before each download, because video sites change often.
+**Does anything get uploaded?** No. Files are read and written on your disk only. Remise goes online in two cases only: the *Video downloader* fetches the video you asked for (and updates itself first, because video sites change often), and a **Download** button fetches what its tool needs, once.
 
 **Will it overwrite my files?** No. Results always get a new name. If that name is already taken, Remise adds `-2`, `-3` and so on.
 
@@ -121,7 +109,7 @@ A few tools use another free program that you install yourself. Until you do, th
 
 **AI Upscale says "vkCreateInstance failed".** It needs an up-to-date graphics driver (any GPU from the last ten years has one). On Linux without a GPU, install your distribution's `mesa-vulkan-drivers` (or `vulkan-swrast`). Macs need nothing.
 
-**Why is a tool striped?** It needs a program that isn't installed on this computer. Hover over it to see which one, and how to get it.
+**Why is a tool striped?** It needs something that isn't on this computer yet. Open it: most of the time its button offers to download it. Otherwise, hover over it to see what to install.
 
 ## For developers
 
