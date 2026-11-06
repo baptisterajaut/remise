@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
-use tools::{Family, Output, Param};
+use tools::{Family, Inputs, Output, Param};
 
 #[derive(Serialize)]
 struct ToolInfo {
@@ -21,6 +21,8 @@ struct ToolInfo {
     blurb: &'static str,
     accepts: &'static [&'static str],
     multi: bool,
+    /// No input: params only (gradient, QR code…).
+    generator: bool,
     params: &'static [Param],
     output: &'static str,
     /// Extension of the file it writes with default params, so the chain builder knows what can follow.
@@ -50,7 +52,8 @@ fn list_tools() -> Vec<ToolInfo> {
             name: t.name,
             blurb: t.blurb,
             accepts: t.accepts,
-            multi: t.multi,
+            multi: t.inputs == Inputs::Many,
+            generator: t.inputs == Inputs::None,
             params: t.params,
             output: match t.output {
                 Output::File { .. } => "file",
@@ -70,11 +73,13 @@ fn list_tools() -> Vec<ToolInfo> {
 
 #[tauri::command]
 async fn run(app: AppHandle, job: String, steps: Vec<runner::StepReq>, inputs: Vec<String>) -> Result<Vec<String>, String> {
+    // Generators have no input file to sit next to: their results go to Downloads.
+    let fallback = app.path().download_dir().or_else(|_| app.path().home_dir()).unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {
         let emit = |p: &runner::Progress| {
             let _ = app.emit("progress", p);
         };
-        runner::run_chain(&emit, &job, steps, inputs)
+        runner::run_chain(&emit, &job, steps, inputs, &fallback)
     })
     .await
     .map_err(|e| e.to_string())?

@@ -10,7 +10,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "H.264 MP4 that plays everywhere.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "crf",
             label: "Strength",
@@ -47,7 +47,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "MP4, WebM, MOV, MKV.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "format",
             label: "To",
@@ -64,7 +64,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Palette-optimised, loops forever.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[
             Param::Select {
                 key: "fps",
@@ -96,7 +96,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Keep a start→end slice. Frame accurate.",
         bins: &["ffmpeg"],
         accepts: AV,
-        multi: false,
+        inputs: Inputs::One,
         params: TRIM,
         output: Output::File { suffix: "trimmed", ext: same },
         build: |j| {
@@ -125,7 +125,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Soundtrack only.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "format",
             label: "Format",
@@ -142,7 +142,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Drop the audio track, no re-encode.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "muted", ext: same },
         build: |j| vec![ffmpeg(j, args!["-c:v", "copy", "-an"])],
@@ -154,7 +154,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Slow-mo or timelapse, audio pitch kept.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "factor",
             label: "Speed",
@@ -174,7 +174,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Scale down to a standard height.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "height",
             label: "Height",
@@ -191,7 +191,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Fix phone footage.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "vf",
             label: "Action",
@@ -213,7 +213,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Back to back, no re-encode (same camera/settings).",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: true,
+        inputs: Inputs::Many,
         params: &[],
         output: Output::File { suffix: "joined", ext: same },
         // CBA: concat demuxer + stream copy, needs matching codecs; concat filter with re-encode if mixed sources matter
@@ -253,7 +253,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "One still every N seconds.",
         bins: &["ffmpeg"],
         accepts: VID,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "every",
             label: "Every",
@@ -279,4 +279,247 @@ pub static TOOLS: &[Tool] = &[
             )]
         },
     },
+    Tool {
+        id: "vid-split",
+        family: Family::Video,
+        name: "Split video",
+        blurb: "Cut into equal parts, no re-encode.",
+        bins: &["ffmpeg"],
+        accepts: VID,
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "every",
+            label: "Every",
+            options: &[("30", "30 s"), ("60", "1 min"), ("300", "5 min"), ("600", "10 min")],
+            default: "60",
+        }],
+        output: Output::Dir("parts"),
+        build: |j| vec![segment(j)],
+    },
+    Tool {
+        id: "vid-crop",
+        family: Family::Video,
+        name: "Crop video",
+        blurb: "Centre-crop to vertical, square or widescreen.",
+        bins: &["ffmpeg"],
+        accepts: VID,
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "ratio",
+            label: "Ratio",
+            options: &[("9/16", "9:16 vertical"), ("1/1", "1:1 square"), ("4/5", "4:5"), ("16/9", "16:9")],
+            default: "9/16",
+        }],
+        output: Output::File { suffix: "cropped", ext: same },
+        build: |j| {
+            let r = j.p("ratio");
+            let vf = format!("crop='min(iw,ih*{r})':'min(ih,iw/({r}))',setsar=1");
+            vec![ffmpeg(j, args!["-vf", vf, "-c:a", "copy"])]
+        },
+    },
+    Tool {
+        id: "vid-watermark",
+        family: Family::Video,
+        name: "Watermark video",
+        blurb: "Drop a video and a logo image.",
+        bins: &["ffmpeg"],
+        accepts: &["mp4", "mov", "mkv", "webm", "avi", "m4v", "png", "jpg", "jpeg", "webp"],
+        inputs: Inputs::Many,
+        params: &[
+            Param::Select {
+                key: "pos",
+                label: "Corner",
+                options: &[("W-w-24:H-h-24", "Bottom right"), ("24:H-h-24", "Bottom left"), ("W-w-24:24", "Top right"), ("24:24", "Top left")],
+                default: "W-w-24:H-h-24",
+            },
+            Param::Select {
+                key: "width",
+                label: "Logo width",
+                options: &[("120", "120 px"), ("200", "200 px"), ("320", "320 px")],
+                default: "200",
+            },
+        ],
+        output: Output::File { suffix: "watermarked", ext: |j| j.pick(VID).map(|v| ext_of(Path::new(&v))).unwrap_or_else(|| "mp4".into()) },
+        build: |j| {
+            let (video, logo) = match pair(j, VID, IMG, "a video and a logo image") {
+                Ok(p) => p,
+                Err(fail) => return vec![fail],
+            };
+            let fc = format!("[1:v]scale={}:-1[l];[0:v][l]overlay={}", j.p("width"), j.p("pos"));
+            vec![Step::Run(
+                "ffmpeg",
+                args!["-hide_banner", "-nostdin", "-y", "-i", video, "-i", logo, "-filter_complex", fc, "-c:a", "copy", j.out()],
+            )]
+        },
+    },
+    Tool {
+        id: "vid-caption",
+        family: Family::Video,
+        name: "Caption",
+        blurb: "Burn subtitles into the picture: drop a video and its .srt.",
+        bins: &["ffmpeg"],
+        accepts: &["mp4", "mov", "mkv", "webm", "avi", "m4v", "srt", "vtt", "ass"],
+        inputs: Inputs::Many,
+        params: &[Param::Select {
+            key: "size",
+            label: "Text size",
+            options: &[("18", "Small"), ("24", "Medium"), ("32", "Large")],
+            default: "24",
+        }],
+        output: Output::File { suffix: "captioned", ext: |_| "mp4".into() },
+        build: |j| {
+            let (video, subs) = match pair(j, VID, &["srt", "vtt", "ass"], "a video and a subtitle file (.srt)") {
+                Ok(p) => p,
+                Err(fail) => return vec![fail],
+            };
+            // The subtitles filter wants its path escaped twice over; a copy with a known name in
+            // scratch keeps that to the drive colon on Windows.
+            let copy = j.tmp.join(format!("subs.{}", ext_of(Path::new(&subs))));
+            let path = s(&copy).replace('\\', "/").replace(':', "\\:");
+            let vf = format!("subtitles='{path}':force_style='FontSize={},Outline=1'", j.p("size"));
+            vec![
+                Step::Copy(PathBuf::from(subs), copy),
+                Step::Run(
+                    "ffmpeg",
+                    args![
+                        "-hide_banner", "-nostdin", "-y", "-i", video, "-vf", vf,
+                        "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "copy", j.out()
+                    ],
+                ),
+            ]
+        },
+    },
+    Tool {
+        id: "vid-transcribe",
+        family: Family::Video,
+        name: "Transcribe",
+        blurb: "Speech to subtitles with Whisper, on this machine (optional install).",
+        bins: &["whisper"],
+        accepts: AV,
+        inputs: Inputs::One,
+        params: &[
+            Param::Select {
+                key: "model",
+                label: "Model",
+                options: &[("tiny", "Fast"), ("base", "Balanced"), ("small", "Accurate")],
+                default: "base",
+            },
+            Param::Select {
+                key: "lang",
+                label: "Language",
+                options: &[("auto", "Detect"), ("en", "English"), ("fr", "French"), ("es", "Spanish"), ("de", "German")],
+                default: "auto",
+            },
+            Param::Select { key: "format", label: "As", options: &[("srt", "SRT"), ("txt", "Text"), ("vtt", "WebVTT")], default: "srt" },
+        ],
+        output: Output::File { suffix: "transcript", ext: fmt },
+        build: |j| {
+            let mut a = args![j.input(), "--model", j.p("model"), "--output_format", j.p("format"), "--output_dir", s(&j.tmp)];
+            if j.p("lang") != "auto" {
+                a.extend(args!["--language", j.p("lang")]);
+            }
+            let written = j.tmp.join(format!("{}.{}", j.stem(), j.p("format")));
+            vec![Step::Run("whisper", a), Step::Rename(written, j.out.clone())]
+        },
+    },
+    Tool {
+        id: "vid-insert",
+        family: Family::Video,
+        name: "Insert clip",
+        blurb: "Drop the main video first, then the clip to splice in at a time.",
+        bins: &["ffmpeg"],
+        accepts: VID,
+        inputs: Inputs::Many,
+        params: &[Param::Text { key: "at", label: "Insert at (seconds)", default: "5", placeholder: "12.5" }],
+        output: Output::File { suffix: "inserted", ext: |_| "mp4".into() },
+        // CBA: both clips need an audio track, and the clip is forced to 25 fps to match
+        build: |j| {
+            let [main, clip] = &j.inputs[..] else { return vec![Step::Fail("drop the main video, then one clip".into())] };
+            let Ok(at) = j.p("at").trim().parse::<f64>() else { return vec![Step::Fail("the insert time is a number of seconds".into())] };
+            let fc = format!(
+                "[0:v]split=3[m1][m2][mr];[0:a]asplit[a1][a2];\
+                 [m1]trim=0:{at},setpts=PTS-STARTPTS,setsar=1[v0];[a1]atrim=0:{at},asetpts=PTS-STARTPTS[x0];\
+                 [m2]trim=start={at},setpts=PTS-STARTPTS,setsar=1[v2];[a2]atrim=start={at},asetpts=PTS-STARTPTS[x2];\
+                 [1:v][mr]scale=rw:rh,setsar=1,fps=25[v1];[1:a]aresample=48000[x1];\
+                 [v0][x0][v1][x1][v2][x2]concat=n=3:v=1:a=1[v][a]"
+            );
+            vec![Step::Run(
+                "ffmpeg",
+                args![
+                    "-hide_banner", "-nostdin", "-y", "-i", s(main), "-i", s(clip), "-filter_complex", fc,
+                    "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", j.out()
+                ],
+            )]
+        },
+    },
+    Tool {
+        id: "vid-add-audio",
+        family: Family::Video,
+        name: "Add audio",
+        blurb: "Drop a video and a track: replace the sound or mix it in.",
+        bins: &["ffmpeg"],
+        accepts: AV,
+        inputs: Inputs::Many,
+        params: &[Param::Select {
+            key: "mode",
+            label: "Track",
+            options: &[("replace", "Replace"), ("mix", "Mix with original")],
+            default: "replace",
+        }],
+        output: Output::File { suffix: "soundtrack", ext: |_| "mp4".into() },
+        build: |j| {
+            let (video, audio) = match pair(j, VID, AUD, "a video and an audio file") {
+                Ok(p) => p,
+                Err(fail) => return vec![fail],
+            };
+            let map = if j.p("mode") == "mix" {
+                args!["-filter_complex", "[0:a][1:a]amix=inputs=2:duration=first[a]", "-map", "0:v", "-map", "[a]"]
+            } else {
+                args!["-map", "0:v", "-map", "1:a", "-shortest"]
+            };
+            let mut a = args!["-hide_banner", "-nostdin", "-y", "-i", video, "-i", audio];
+            a.extend(map);
+            a.extend(args!["-c:v", "copy", "-c:a", "aac", j.out()]);
+            vec![Step::Run("ffmpeg", a)]
+        },
+    },
+    Tool {
+        id: "vid-download",
+        family: Family::Video,
+        name: "Video downloader",
+        blurb: "Save a video from a link with yt-dlp (optional install).",
+        bins: &["yt-dlp", "ffmpeg"],
+        accepts: &[],
+        inputs: Inputs::None,
+        params: &[
+            Param::Text { key: "url", label: "Link", default: "", placeholder: "https://…" },
+            Param::Select {
+                key: "quality",
+                label: "Quality",
+                options: &[("bv*[height<=1080]+ba/b", "Up to 1080p"), ("bv*+ba/b", "Best"), ("ba/b", "Audio only")],
+                default: "bv*[height<=1080]+ba/b",
+            },
+        ],
+        output: Output::Dir("downloads"),
+        build: |j| {
+            let url = j.p("url").trim();
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return vec![Step::Fail("paste a link starting with https://".into())];
+            }
+            let template = format!("{}/%(title).80s.%(ext)s", s(&j.out).replace('%', "%%"));
+            vec![Step::Run("yt-dlp", args!["--no-playlist", "-f", j.p("quality"), "-o", template, "--", url])]
+        },
+    },
 ];
+
+/// Equal-length parts with the segment muxer, stream copy.
+pub fn segment(j: &Job) -> Step {
+    Step::Run(
+        "ffmpeg",
+        args![
+            "-hide_banner", "-nostdin", "-y", "-i", j.input(), "-map", "0", "-c", "copy",
+            "-f", "segment", "-segment_time", j.p("every"), "-reset_timestamps", "1",
+            j.out_pattern(&format!("-%03d.{}", j.in_ext()))
+        ],
+    )
+}

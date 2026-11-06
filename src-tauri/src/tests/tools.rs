@@ -110,8 +110,15 @@ fn join_quotes_single_quotes_in_concat_list() {
 #[test]
 fn rename_numbers_and_keeps_extension() {
     let steps = job("batch-rename", &["/p/a.JPG", "/p/b.jpg"], "", &[("pattern", "trip-{n}")]);
-    assert_eq!(steps[0], Step::Rename("/p/a.JPG".into(), "/p/trip-01.JPG".into()));
-    assert_eq!(steps[1], Step::Rename("/p/b.jpg".into(), "/p/trip-02.jpg".into()));
+    let renames: Vec<_> = steps
+        .iter()
+        .map(|s| match s {
+            Step::Rename(a, b) => (a.clone(), b.clone()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(renames[0], ("/p/a.JPG".into(), "/p/trip-01.JPG".into()));
+    assert_eq!(renames[1], ("/p/b.jpg".into(), "/p/trip-02.jpg".into()));
 }
 
 #[test]

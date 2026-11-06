@@ -20,6 +20,11 @@ fn vendor() -> Option<&'static Path> {
 /// Names a binary goes by across platforms.
 fn aliases(bin: &str) -> Vec<&str> {
     match bin {
+        // Any Chromium will do for headless printing; Edge ships with every Windows.
+        "chromium" => vec![
+            "chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome", "msedge",
+            "Google Chrome", "Chromium", "Microsoft Edge",
+        ],
         "gs" => vec!["gs", "gswin64c", "gswin32c"],
         "7z" => vec!["7z", "7zz", "7za", "7zzs"],
         other => vec![other],
@@ -41,11 +46,17 @@ fn search_dirs() -> Vec<PathBuf> {
     if let Some(home) = std::env::var_os("HOME") {
         dirs.push(PathBuf::from(home).join(".local/bin"));
     }
+    // Browsers live in app bundles on macOS.
+    for app in ["Google Chrome", "Chromium", "Microsoft Edge"] {
+        dirs.push(PathBuf::from(format!("/Applications/{app}.app/Contents/MacOS")));
+    }
     // Windows installers for these don't touch PATH.
     for pf in ["ProgramFiles", "ProgramFiles(x86)"].iter().filter_map(std::env::var_os) {
         let pf = PathBuf::from(pf);
         dirs.push(pf.join("7-Zip"));
         dirs.push(pf.join("Tesseract-OCR"));
+        dirs.push(pf.join("Microsoft/Edge/Application"));
+        dirs.push(pf.join("Google/Chrome/Application"));
         if let Ok(rd) = fs::read_dir(pf.join("gs")) {
             dirs.extend(rd.flatten().map(|e| e.path().join("bin")));
         }
@@ -100,6 +111,12 @@ pub fn command(path: &Path) -> Command {
         c.creation_flags(CREATE_NO_WINDOW);
     }
     if let Some(v) = vendor() {
+        // Tools that call other tools (yt-dlp → ffmpeg, ImageMagick → gs) find the bundled ones.
+        let bundled = fs::read_dir(v).into_iter().flatten().flatten().flat_map(|e| [e.path().join("bin"), e.path()]);
+        let path = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect::<Vec<_>>()).unwrap_or_default();
+        if let Ok(joined) = std::env::join_paths(bundled.chain(path)) {
+            c.env("PATH", joined);
+        }
         let env = [
             ("TESSDATA_PREFIX", "tesseract/tessdata"),
             ("MAGICK_GHOSTSCRIPT_PATH", "ghostscript/bin"),

@@ -3,7 +3,7 @@
 
 use crate::bins::{command, resolve};
 use crate::runner::{run_chain, StepReq};
-use crate::tools::{self, Family};
+use crate::tools::{self, Family, Inputs};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,10 +16,10 @@ fn sh(bin: &str, args: &[&str]) {
     assert!(ok.unwrap().success(), "fixture {bin} {args:?}");
 }
 
-fn go(tool: &str, inputs: &[&Path], params: &[(&str, &str)]) -> Result<Vec<String>, String> {
+fn go(tool: &str, inputs: &[&Path], params: &[(&str, &str)], home: &Path) -> Result<Vec<String>, String> {
     let params = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
     let inputs = inputs.iter().map(|p| tools::s(p)).collect();
-    run_chain(&|_| {}, tool, vec![StepReq { tool: tool.into(), params }], inputs)
+    run_chain(&|_| {}, tool, vec![StepReq { tool: tool.into(), params }], inputs, home)
 }
 
 struct Fixtures {
@@ -30,6 +30,41 @@ struct Fixtures {
     mp4: PathBuf,
     mp4b: PathBuf,
     wav: PathBuf,
+    srt: PathBuf,
+    html: PathBuf,
+    epub: PathBuf,
+    font: Option<PathBuf>,
+}
+
+/// A two-chapter EPUB, zipped with 7z.
+fn make_epub(dir: &Path, out: &Path) {
+    let src = dir.join("epubsrc");
+    let w = |rel: &str, body: &str| {
+        let p = src.join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, body).unwrap();
+    };
+    w("mimetype", "application/epub+zip");
+    w("META-INF/container.xml", r#"<?xml version="1.0"?><container><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#);
+    w("OEBPS/content.opf", r#"<package><manifest><item id="c1" href="one.xhtml" media-type="application/xhtml+xml"/><item id="c2" href="two.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>"#);
+    w("OEBPS/one.xhtml", "<html><head><title>1</title></head><body><h1>Chapter one</h1><p>Once.</p></body></html>");
+    w("OEBPS/two.xhtml", "<html><head><title>2</title></head><body><h1>Chapter two</h1><p>Twice.</p></body></html>");
+    let all = format!("{}{}*", tools::s(&src), std::path::MAIN_SEPARATOR);
+    sh("7z", &["a", "-tzip", "-y", out.to_str().unwrap(), &all]);
+}
+
+fn system_font() -> Option<PathBuf> {
+    [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+    ]
+    .iter()
+    .map(PathBuf::from)
+    .find(|p| p.is_file())
 }
 
 fn fixtures(test: &str) -> Fixtures {
@@ -38,7 +73,24 @@ fn fixtures(test: &str) -> Fixtures {
     fs::create_dir_all(&dir).unwrap();
     let f = |n: &str| dir.join(n);
     // A `%` in a name has bitten printf-style CLIs before: keep it in the fixtures.
-    let fx = Fixtures { png: f("a 50%.png"), png2: f("b.png"), pdf: f("doc.pdf"), mp4: f("clip.mp4"), mp4b: f("clip2.mp4"), wav: f("tone.wav"), dir };
+    let fx = Fixtures {
+        png: f("a 50%.png"),
+        png2: f("b.png"),
+        pdf: f("doc.pdf"),
+        mp4: f("clip.mp4"),
+        mp4b: f("clip2.mp4"),
+        wav: f("tone.wav"),
+        srt: f("clip.srt"),
+        html: f("page.html"),
+        epub: f("book.epub"),
+        // Copied: the specimen lands next to its input, and system font dirs are read-only.
+        font: system_font().map(|f| {
+            let copy = dir.join(f.file_name().unwrap());
+            fs::copy(&f, &copy).unwrap();
+            copy
+        }),
+        dir: dir.clone(),
+    };
     let p = |x: &PathBuf| x.to_str().unwrap().to_string();
     sh("magick", &["-size", "640x400", "xc:white", "-fill", "black", "-pointsize", "48", "-annotate", "+40+200", "Hello Remise", &p(&fx.png)]);
     sh("magick", &["-size", "320x200", "gradient:orange-navy", &p(&fx.png2)]);
@@ -47,74 +99,125 @@ fn fixtures(test: &str) -> Fixtures {
         sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "testsrc=s=320x240:d=3", "-f", "lavfi", "-i", "sine=d=3", "-shortest", "-pix_fmt", "yuv420p", &p(out)]);
     }
     sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "sine=d=2", &p(&fx.wav)]);
+    fs::write(&fx.srt, "1\n00:00:00,000 --> 00:00:02,000\nHello Remise\n").unwrap();
+    fs::write(&fx.html, "<!doctype html><h1>Hello Remise</h1><p>Printed headless.</p>").unwrap();
+    make_epub(&dir, &fx.epub);
     fx
 }
 
-/// Picks inputs for a tool from the fixtures by what it accepts.
-fn inputs_for<'a>(t: &tools::Tool, fx: &'a Fixtures) -> Vec<&'a Path> {
+/// Inputs for a tool: the special mixes by id, the rest by what it accepts.
+fn inputs_for<'a>(t: &tools::Tool, fx: &'a Fixtures) -> Option<Vec<&'a Path>> {
     let takes = |e: &str| t.accepts.contains(&e);
-    match (t.multi, t.family) {
-        (true, Family::Video) => vec![&fx.mp4, &fx.mp4b],
-        (true, Family::Files) => vec![&fx.png, &fx.pdf],
-        (true, _) if takes("pdf") => vec![&fx.pdf, &fx.pdf],
-        (true, _) => vec![&fx.png, &fx.png2],
-        _ if takes("pdf") => vec![&fx.pdf],
-        _ if takes("png") => vec![&fx.png],
-        (_, Family::Audio) if takes("wav") => vec![&fx.wav],
-        _ => vec![&fx.mp4],
-    }
+    let v: Vec<&Path> = match t.id {
+        "pdf-sign" => vec![&fx.pdf, &fx.png2],
+        "vid-watermark" => vec![&fx.mp4, &fx.png2],
+        "vid-caption" => vec![&fx.mp4, &fx.srt],
+        "vid-add-audio" => vec![&fx.mp4, &fx.wav],
+        "img-attach" => vec![&fx.png2, &fx.png],
+        "aud-merge" => vec![&fx.wav, &fx.wav],
+        "pdf-ebook" => vec![&fx.epub],
+        "pdf-html" | "create-html-image" => vec![&fx.html],
+        "create-font" => vec![fx.font.as_deref()?],
+        _ if t.inputs == Inputs::None => vec![],
+        _ => match (t.inputs == Inputs::Many, t.family) {
+            (true, Family::Video) => vec![&fx.mp4, &fx.mp4b],
+            (true, Family::Files) => vec![&fx.png, &fx.pdf],
+            (true, _) if takes("pdf") => vec![&fx.pdf, &fx.pdf],
+            (true, _) => vec![&fx.png, &fx.png2],
+            _ if takes("pdf") => vec![&fx.pdf],
+            _ if takes("png") => vec![&fx.png],
+            (_, Family::Audio) if takes("wav") => vec![&fx.wav],
+            _ => vec![&fx.mp4],
+        },
+    };
+    Some(v)
 }
 
 fn params_for(id: &str) -> &'static [(&'static str, &'static str)] {
     match id {
         "pdf-encrypt" => &[("password", "s3cret")],
         "pdf-extract" => &[("pages", "2")],
-        "vid-trim" => &[("start", "00:00:01"), ("end", "00:00:02")],
+        "pdf-organize" => &[("order", "2,1")],
+        "vid-trim" | "aud-trim" => &[("start", "00:00:01"), ("end", "00:00:02")],
+        "vid-insert" => &[("at", "1.5")],
+        "create-qr" => &[("text", "https://example.org/remise")],
+        "create-shader" => &[("size", "1080x1080")],
         _ => &[],
     }
 }
+
+/// Optional installs, the network, and tools that move files or need a previous output.
+const NOT_IN_LOOP: &[&str] = &[
+    "pdf-studio", "img-remove-bg", "img-ai-upscale", "vid-transcribe", "vid-download",
+    "batch-rename", "file-sort", "file-dates", "pdf-unlock", "arc-extract",
+];
 
 #[test]
 #[ignore]
 fn smoke_every_tool() {
     let fx = fixtures("all");
+    let home = fx.dir.join("made");
+    fs::create_dir_all(&home).unwrap();
     let mut failures = vec![];
-    let mut check = |tool: &str, inputs: &[&Path], params: &[(&str, &str)]| match go(tool, inputs, params) {
+    let mut check = |tool: &str, inputs: &[&Path], params: &[(&str, &str)]| match go(tool, inputs, params, &home) {
         Ok(out) => {
             assert!(!out.is_empty() && out.iter().all(|o| Path::new(o).exists()), "{tool}: {out:?}");
             println!("ok   {tool:20} -> {}", out.join(", "));
         }
         Err(e) => failures.push(format!("{tool}: {e}")),
     };
-    // Skipped here: they need a previous output, move files, or an optional AI model / app.
-    let later = ["pdf-studio", "img-remove-bg", "batch-rename", "pdf-unlock", "arc-extract"];
-    for t in tools::all().filter(|t| !later.contains(&t.id)) {
-        check(t.id, &inputs_for(t, &fx), params_for(t.id));
+    for t in tools::all().filter(|t| !NOT_IN_LOOP.contains(&t.id)) {
+        if t.bins.contains(&"chromium") && !crate::bins::available("chromium") {
+            println!("skip {:20} (no Chromium/Chrome/Edge)", t.id);
+            continue;
+        }
+        match inputs_for(t, &fx) {
+            Some(inputs) => check(t.id, &inputs, params_for(t.id)),
+            None => println!("skip {:20} (no fixture)", t.id),
+        }
     }
-    let zip = go("arc-create", &[&fx.png, &fx.pdf], &[]).unwrap();
+    // Second modes of tools whose variants take a different code path.
+    check("img-redact", &[&fx.png], &[("mode", "pixelate")]);
+    check("img-compare", &[&fx.png, &fx.png2], &[("mode", "diff")]);
+    check("create-mockup", &[&fx.png], &[("device", "phone")]);
+    check("create-qr", &[], &[("text", "hello"), ("format", "png")]);
+    check("create-gradient", &[], &[("kind", "radial")]);
+
+    let zip = go("arc-create", &[&fx.png, &fx.pdf], &[], &home).unwrap();
     check("arc-extract", &[Path::new(&zip[0])], &[]);
-    let locked = go("pdf-encrypt", &[&fx.pdf], &[("password", "pw")]).unwrap();
+    let locked = go("pdf-encrypt", &[&fx.pdf], &[("password", "pw")], &home).unwrap();
     check("pdf-unlock", &[Path::new(&locked[0])], &[("password", "pw")]);
 
-    let (r1, r2) = (fx.dir.join("r1.txt"), fx.dir.join("r2.txt"));
-    fs::write(&r1, "").unwrap();
-    fs::write(&r2, "").unwrap();
+    let loose = fx.dir.join("loose");
+    fs::create_dir_all(&loose).unwrap();
+    let (r1, r2, pic, song) = (loose.join("r1.txt"), loose.join("r2.txt"), loose.join("pic.jpg"), loose.join("song.mp3"));
+    for f in [&r1, &r2, &pic, &song] {
+        fs::write(f, "").unwrap();
+    }
+    check("file-dates", &[&r1], &[("date", "2020-05-17 10:30")]);
+    let modified = fs::metadata(&r1).unwrap().modified().unwrap();
+    assert_eq!(Some(modified), tools::parse_date("2020-05-17 10:30"));
     check("batch-rename", &[&r1, &r2], &[("pattern", "note-{n}")]);
-    assert!(fx.dir.join("note-01.txt").exists() && fx.dir.join("note-02.txt").exists());
+    assert!(loose.join("note-01.txt").exists() && loose.join("note-02.txt").exists());
+    check("file-sort", &[&pic, &song], &[("by", "kind")]);
+    assert!(loose.join("Images/pic.jpg").exists() && loose.join("Audio/song.mp3").exists());
 
     assert!(failures.is_empty(), "\n{}", failures.join("\n\n"));
-    let _ = fs::remove_dir_all(&fx.dir);
+    // REMISE_KEEP=1 leaves the outputs around for eyeballing.
+    if std::env::var_os("REMISE_KEEP").is_none() {
+        let _ = fs::remove_dir_all(&fx.dir);
+    }
 }
 
 #[test]
 #[ignore]
 fn smoke_chain_lands_one_file_next_to_input() {
     let fx = fixtures("chain");
+    let before = fs::read_dir(&fx.dir).unwrap().count();
     let steps = ["pdf-compress", "pdf-grayscale", "pdf-web"].map(|t| StepReq { tool: t.into(), params: HashMap::new() });
-    let out = run_chain(&|_| {}, "chain", steps.into(), vec![tools::s(&fx.pdf)]).unwrap();
+    let out = run_chain(&|_| {}, "chain", steps.into(), vec![tools::s(&fx.pdf)], &fx.dir).unwrap();
     assert!(out[0].ends_with("doc.compressed.gray.web.pdf"), "{out:?}");
-    let left: Vec<_> = fs::read_dir(&fx.dir).unwrap().flatten().map(|e| e.file_name()).collect();
-    assert_eq!(left.len(), 7, "only the final file is added: {left:?}");
+    assert_eq!(fs::read_dir(&fx.dir).unwrap().count(), before + 1, "only the final file is added");
     let _ = fs::remove_dir_all(&fx.dir);
 }
 
@@ -125,7 +228,7 @@ fn smoke_ffmpeg_reports_progress() {
     let seen = std::cell::RefCell::new(vec![]);
     let emit = |p: &crate::runner::Progress| seen.borrow_mut().push(p.pct);
     let req = StepReq { tool: "vid-compress".into(), params: HashMap::new() };
-    run_chain(&emit, "p", vec![req], vec![tools::s(&fx.mp4)]).unwrap();
+    run_chain(&emit, "p", vec![req], vec![tools::s(&fx.mp4)], &fx.dir).unwrap();
     let pcts: Vec<f64> = seen.borrow().iter().flatten().copied().collect();
     assert!(!pcts.is_empty() && pcts.iter().all(|p| (0.0..=1.0).contains(p)), "{pcts:?}");
     let _ = fs::remove_dir_all(&fx.dir);

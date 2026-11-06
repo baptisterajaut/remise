@@ -10,7 +10,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "MP3, M4A, WAV, FLAC, OGG, Opus.",
         bins: &["ffmpeg"],
         accepts: AV,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "format",
             label: "To",
@@ -34,7 +34,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "MP3 at the bitrate you pick.",
         bins: &["ffmpeg"],
         accepts: AUD,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "bitrate",
             label: "Bitrate",
@@ -51,7 +51,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Broadcast loudness or a fixed gain.",
         bins: &["ffmpeg"],
         accepts: AV,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "af",
             label: "Adjust",
@@ -74,7 +74,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Faster or slower, pitch kept.",
         bins: &["ffmpeg"],
         accepts: AUD,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "factor",
             label: "Speed",
@@ -91,7 +91,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "The whole track as a PNG.",
         bins: &["ffmpeg"],
         accepts: AV,
-        multi: false,
+        inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "waveform", ext: |_| "png".into() },
         build: |j| {
@@ -99,6 +99,99 @@ pub static TOOLS: &[Tool] = &[
                 j,
                 args!["-filter_complex", "showwavespic=s=1600x400:colors=#f2a33a", "-frames:v", "1"],
             )]
+        },
+    },
+    Tool {
+        id: "aud-trim",
+        family: Family::Audio,
+        name: "Trim audio",
+        blurb: "Keep a start→end slice of a track.",
+        bins: &["ffmpeg"],
+        accepts: AUD,
+        inputs: Inputs::One,
+        params: TRIM,
+        output: Output::File { suffix: "trimmed", ext: same },
+        build: |j| {
+            vec![Step::Run(
+                "ffmpeg",
+                args!["-hide_banner", "-nostdin", "-y", "-ss", j.p("start"), "-to", j.p("end"), "-i", j.input(), j.out()],
+            )]
+        },
+    },
+    Tool {
+        id: "aud-split",
+        family: Family::Audio,
+        name: "Split audio",
+        blurb: "Cut a long recording into equal parts.",
+        bins: &["ffmpeg"],
+        accepts: AUD,
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "every",
+            label: "Every",
+            options: &[("60", "1 min"), ("300", "5 min"), ("600", "10 min"), ("1800", "30 min")],
+            default: "300",
+        }],
+        output: Output::Dir("parts"),
+        build: |j| vec![super::video::segment(j)],
+    },
+    Tool {
+        id: "aud-merge",
+        family: Family::Audio,
+        name: "Merge audio",
+        blurb: "Tracks back to back, in drop order.",
+        bins: &["ffmpeg"],
+        accepts: AUD,
+        inputs: Inputs::Many,
+        params: &[Param::Select {
+            key: "format",
+            label: "As",
+            options: &[("mp3", "MP3"), ("m4a", "M4A"), ("wav", "WAV"), ("flac", "FLAC")],
+            default: "mp3",
+        }],
+        output: Output::File { suffix: "merged", ext: fmt },
+        build: |j| {
+            let mut a = args!["-hide_banner", "-nostdin", "-y"];
+            for p in &j.inputs {
+                a.extend(args!["-i", s(p)]);
+            }
+            let pads: String = (0..j.inputs.len()).map(|i| format!("[{i}:a]")).collect();
+            a.extend(args!["-filter_complex", format!("{pads}concat=n={}:v=0:a=1[a]", j.inputs.len()), "-map", "[a]", j.out()]);
+            vec![Step::Run("ffmpeg", a)]
+        },
+    },
+    Tool {
+        id: "aud-audiogram",
+        family: Family::Audio,
+        name: "Audiogram",
+        blurb: "Audio as a shareable video with a live waveform.",
+        bins: &["ffmpeg"],
+        accepts: AUD,
+        inputs: Inputs::One,
+        params: &[
+            Param::Select {
+                key: "size",
+                label: "Format",
+                options: &[("1080x1080", "Square"), ("1080x1920", "Story"), ("1920x1080", "Wide")],
+                default: "1080x1080",
+            },
+            Param::Select {
+                key: "color",
+                label: "Wave",
+                options: &[("#f2a33a", "Amber"), ("#3cc2b3", "Teal"), ("#ffffff", "White")],
+                default: "#f2a33a",
+            },
+        ],
+        output: Output::File { suffix: "audiogram", ext: |_| "mp4".into() },
+        build: |j| {
+            let (w, h) = j.p("size").split_once('x').unwrap_or(("1080", "1080"));
+            let fc = format!(
+                "color=c=#1d1914:s={w}x{h}:r=30[bg];[0:a]showwaves=s={w}x{}:mode=cline:rate=30:colors={}[wave];\
+                 [bg][wave]overlay=0:(H-h)/2:shortest=1,format=yuv420p[v]",
+                h.parse::<u32>().unwrap_or(1080) / 3,
+                j.p("color")
+            );
+            vec![ffmpeg(j, args!["-filter_complex", fc, "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-c:a", "aac", "-shortest"])]
         },
     },
 ];

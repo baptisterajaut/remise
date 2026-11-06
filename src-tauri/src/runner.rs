@@ -3,7 +3,7 @@
 //! under a name that never overwrites anything.
 
 use crate::bins::{command, resolve, which};
-use crate::tools::{self, find, stem_of, with_defaults, Job, Output, Step, Tool};
+use crate::tools::{self, find, stem_of, with_defaults, Inputs, Job, Output, Step, Tool};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -104,6 +104,9 @@ fn drain_stdout(stdout: ChildStdout, on_progress: impl Fn(f64)) -> String {
 // CBA: no cancel; keeping the Child in a job table + a `cancel` command if long video jobs need it
 fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String]) -> Result<(), String> {
     let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
+    // `{bindir}`: data that ships next to a tool's binary (Real-ESRGAN models).
+    let bindir = path.parent().map(tools::s).unwrap_or_default();
+    let args: Vec<String> = args.iter().map(|a| a.replace("{bindir}", &bindir)).collect();
     let mut cmd = command(&path);
     if bin == "ffmpeg" {
         cmd.args(["-progress", "pipe:1", "-nostats"]);
@@ -143,16 +146,47 @@ fn list_dir(dir: &Path, ext: &str, out: &Path) -> Result<(), String> {
     fs::write(out, files.join("\n") + "\n").map_err(|e| e.to_string())
 }
 
-fn run_step(emit: Emit, p: &Progress, step: Step, produced: &mut Vec<PathBuf>) -> Result<(), String> {
+/// Runs a binary and saves its stdout, for a later `Then` to read.
+fn capture(bin: &str, args: &[String], into: &Path) -> Result<(), String> {
+    let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
+    let out = command(&path).args(&args).stdin(Stdio::null()).output().map_err(|e| format!("{bin}: {e}"))?;
+    if !out.status.success() {
+        return Err(last_lines(&String::from_utf8_lossy(&out.stderr), 6));
+    }
+    fs::write(into, &out.stdout).map_err(|e| e.to_string())
+}
+
+fn touch(path: &Path, when: std::time::SystemTime) -> Result<(), String> {
+    let f = fs::File::options().write(true).open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    f.set_modified(when).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+fn rename(from: &Path, to: &Path) -> Result<(), String> {
+    if to.exists() {
+        return Err(format!("{} already exists", to.display()));
+    }
+    if let Some(dir) = to.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    fs::rename(from, to).map_err(|e| e.to_string())
+}
+
+fn run_step(emit: Emit, p: &Progress, job: &Job, step: Step, produced: &mut Vec<PathBuf>) -> Result<(), String> {
     match step {
         Step::Run(bin, args) => exec(emit, p, bin, &args),
+        Step::Capture { bin, args, into } => capture(bin, &args, &into),
+        Step::Then(next) => next(job)?.into_iter().try_for_each(|s| run_step(emit, p, job, s, produced)),
+        Step::Fail(msg) => Err(msg),
+        Step::Copy(from, to) => fs::copy(&from, &to).map(|_| ()).map_err(|e| format!("{}: {e}", from.display())),
+        Step::Touch(path, when) => {
+            touch(&path, when)?;
+            produced.push(path);
+            Ok(())
+        }
         Step::ListDir { dir, ext, out } => list_dir(&dir, ext, &out),
         Step::Write(path, body) => fs::write(path, body).map_err(|e| e.to_string()),
         Step::Rename(from, to) => {
-            if to.exists() {
-                return Err(format!("{} already exists", to.display()));
-            }
-            fs::rename(&from, &to).map_err(|e| e.to_string())?;
+            rename(&from, &to)?;
             produced.push(to);
             Ok(())
         }
@@ -225,7 +259,7 @@ impl Chain<'_> {
         let p = Progress { job: self.job_id, step: i, steps: self.steps, pct: None };
         (self.emit)(&p);
         let mut produced = Vec::new();
-        let outcome = (tool.build)(&job).into_iter().try_for_each(|s| run_step(self.emit, &p, s, &mut produced));
+        let outcome = (tool.build)(&job).into_iter().try_for_each(|s| run_step(self.emit, &p, &job, s, &mut produced));
         match (&tool.output, outcome) {
             (Output::Dir(_), Err(e)) => {
                 let _ = fs::remove_dir_all(&job.out);
@@ -240,16 +274,22 @@ impl Chain<'_> {
     }
 }
 
-pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<String>) -> Result<Vec<String>, String> {
-    if steps.is_empty() || inputs.is_empty() {
+/// `fallback` is where a generator (no input file) writes its result.
+pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<String>, fallback: &Path) -> Result<Vec<String>, String> {
+    let generator = steps.first().and_then(|s| find(&s.tool)).is_some_and(|t| t.inputs == Inputs::None);
+    if steps.is_empty() || (inputs.is_empty() && !generator) {
         return Err("nothing to do".into());
     }
     let mut current: Vec<PathBuf> = inputs.iter().map(PathBuf::from).collect();
+    let (home, stem) = match current.first() {
+        Some(first) => (first.parent().map(Path::to_path_buf).unwrap_or_default(), stem_of(first)),
+        None => (fallback.to_path_buf(), "remise".to_string()),
+    };
     let mut chain = Chain {
         emit,
         job_id,
-        home: current[0].parent().map(Path::to_path_buf).unwrap_or_default(),
-        stem: stem_of(&current[0]),
+        home,
+        stem,
         scratch: std::env::temp_dir().join(format!("remise-{}-{job_id}", std::process::id())),
         steps: steps.len(),
         suffixes: Vec::new(),

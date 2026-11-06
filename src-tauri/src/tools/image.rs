@@ -10,7 +10,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "PNG, JPG, WebP, AVIF, TIFF, GIF.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "format",
             label: "To",
@@ -34,7 +34,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Smaller file, same format, metadata stripped.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "quality",
             label: "Quality",
@@ -56,7 +56,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Fit within a size, never upscales.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "size",
             label: "Fit within",
@@ -81,7 +81,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Quarter turns and mirrors.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "op",
             label: "Action",
@@ -108,7 +108,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Trims uniform edges (scans, screenshots).",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "trimmed", ext: same },
         build: |j| vec![magick(j, args!["-auto-orient", "-fuzz", "8%", "-trim", "+repage"])],
@@ -120,7 +120,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Removes EXIF, GPS and camera data.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "clean", ext: same },
         build: |j| vec![magick(j, args!["-auto-orient", "-strip"])],
@@ -132,7 +132,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Local AI cut-out (rembg). Transparent PNG.",
         bins: &["rembg"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "cutout", ext: |_| "png".into() },
         build: |j| vec![Step::Run("rembg", args!["i", j.input(), j.out()])],
@@ -144,7 +144,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Logos and line art to a clean SVG.",
         bins: &["magick", "potrace"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "threshold",
             label: "Threshold",
@@ -181,7 +181,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Grayscale, sepia, blur, sharpen, poster.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "effect",
             label: "Effect",
@@ -211,7 +211,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Text stamped in a corner.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[
             Param::Text { key: "text", label: "Text", default: "© ", placeholder: "© you" },
             Param::Select {
@@ -265,7 +265,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Lanczos + sharpen. Not AI, but honest.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "factor",
             label: "Factor",
@@ -282,7 +282,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Multi-size .ico, 16 to 256 px.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "icon", ext: |_| "ico".into() },
         build: |j| {
@@ -296,7 +296,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "Dominant colours as a swatch strip.",
         bins: &["magick"],
         accepts: IMG,
-        multi: false,
+        inputs: Inputs::One,
         params: &[Param::Select {
             key: "n",
             label: "Colours",
@@ -318,7 +318,7 @@ pub static TOOLS: &[Tool] = &[
         blurb: "All dropped images on one grid.",
         bins: &["magick"],
         accepts: IMG,
-        multi: true,
+        inputs: Inputs::Many,
         params: &[Param::Select {
             key: "cols",
             label: "Columns",
@@ -342,4 +342,257 @@ pub static TOOLS: &[Tool] = &[
             vec![Step::Run("magick", a)]
         },
     },
+    Tool {
+        id: "img-crop",
+        family: Family::Image,
+        name: "Crop",
+        blurb: "Centre-crop to a ratio: square, portrait, story, widescreen.",
+        bins: &["magick"],
+        accepts: IMG,
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "ratio",
+            label: "Ratio",
+            options: &[("1:1", "1:1"), ("4:5", "4:5"), ("9:16", "9:16"), ("16:9", "16:9"), ("3:2", "3:2"), ("4:3", "4:3")],
+            default: "1:1",
+        }],
+        output: Output::File { suffix: "cropped", ext: same },
+        build: |j| vec![magick(j, args!["-auto-orient", "-gravity", "center", "-crop", j.p("ratio"), "+repage"])],
+    },
+    Tool {
+        id: "img-redact",
+        family: Family::Image,
+        name: "Redact image",
+        blurb: "Black out or pixelate areas (faces, plates, card numbers).",
+        bins: &["magick"],
+        accepts: IMG,
+        inputs: Inputs::One,
+        params: &[
+            Param::Text {
+                key: "areas",
+                label: "Areas (x,y,w,h in % from top-left; ';' between)",
+                default: "35,35,30,30",
+                placeholder: "10,20,30,10; 60,70,20,15",
+            },
+            Param::Select {
+                key: "mode",
+                label: "How",
+                options: &[("black", "Black box"), ("pixelate", "Pixelate")],
+                default: "black",
+            },
+        ],
+        output: Output::File { suffix: "redacted", ext: same },
+        build: |j| match parse_areas(j.p("areas")) {
+            Err(e) => vec![Step::Fail(e)],
+            Ok(areas) => {
+                let draw: String = areas
+                    .iter()
+                    .map(|[x, y, w, h]| {
+                        format!("rectangle %[fx:w*{x}/100],%[fx:h*{y}/100] %[fx:w*{}/100],%[fx:h*{}/100] ", x + w, y + h)
+                    })
+                    .collect();
+                if j.p("mode") == "black" {
+                    return vec![magick(j, args!["-auto-orient", "-fill", "black", "-draw", draw])];
+                }
+                vec![measure(j, &j.input()), Step::Then(pixelate_plan)]
+            }
+        },
+    },
+    Tool {
+        id: "img-seo",
+        family: Family::Image,
+        name: "SEO image",
+        blurb: "Web-ready: WebP, ≤1600 px, no metadata, slug file name.",
+        bins: &["magick"],
+        accepts: IMG,
+        inputs: Inputs::One,
+        params: &[],
+        output: Output::None,
+        build: |j| {
+            vec![
+                Step::Run("magick", args![j.input(), "-auto-orient", "-strip", "-resize", "1600x1600>", "-quality", "80", j.tmp("seo.webp")]),
+                Step::Then(|j| {
+                    let dir = j.inputs[0].parent().unwrap_or(&j.tmp).to_path_buf();
+                    let slug = slugify(&j.stem());
+                    let target = (1..)
+                        .map(|n| dir.join(if n == 1 { format!("{slug}.webp") } else { format!("{slug}-{n}.webp") }))
+                        .find(|p| !p.exists())
+                        .unwrap();
+                    Ok(vec![Step::Rename(j.tmp.join("seo.webp"), target)])
+                }),
+            ]
+        },
+    },
+    Tool {
+        id: "img-compare",
+        family: Family::Image,
+        name: "Compare images",
+        blurb: "Two images side by side, or what changed between them.",
+        bins: &["magick"],
+        accepts: IMG,
+        inputs: Inputs::Many,
+        params: &[Param::Select {
+            key: "mode",
+            label: "Show",
+            options: &[("side", "Side by side"), ("diff", "Differences")],
+            default: "side",
+        }],
+        output: Output::File { suffix: "compare", ext: |_| "png".into() },
+        build: |j| {
+            let [a, b] = &j.inputs[..] else { return vec![Step::Fail("drop exactly two images".into())] };
+            if j.p("mode") == "diff" {
+                return vec![measure(j, &s(a)), Step::Then(diff_plan)];
+            }
+            vec![Step::Run(
+                "magick",
+                args![s(a), s(b), "-resize", "x900", "-background", "white", "-splice", "12x0", "+append", "-chop", "12x0", j.out()],
+            )]
+        },
+    },
+    Tool {
+        id: "img-attach",
+        family: Family::Image,
+        name: "Attach to each",
+        blurb: "Drop a logo first, then photos: the logo lands on each one.",
+        bins: &["magick"],
+        accepts: IMG,
+        inputs: Inputs::Many,
+        params: &[
+            Param::Select {
+                key: "corner",
+                label: "Corner",
+                options: &[("southeast", "Bottom right"), ("southwest", "Bottom left"), ("northeast", "Top right"), ("northwest", "Top left")],
+                default: "southeast",
+            },
+            Param::Select {
+                key: "size",
+                label: "Logo width",
+                options: &[("10", "10 %"), ("15", "15 %"), ("25", "25 %")],
+                default: "15",
+            },
+        ],
+        output: Output::Dir("attached"),
+        build: |j| {
+            if j.inputs.len() < 2 {
+                return vec![Step::Fail("drop the logo first, then one or more photos".into())];
+            }
+            // The logo is sized from each photo's width, which only identify knows.
+            let mut steps: Vec<Step> = j.inputs[1..]
+                .iter()
+                .enumerate()
+                .map(|(i, p)| Step::Capture {
+                    bin: "magick",
+                    args: args!["identify", "-format", "%w", format!("{}[0]", s(p))],
+                    into: j.tmp.join(format!("{i}.w")),
+                })
+                .collect();
+            steps.push(Step::Then(attach_plan));
+            steps
+        },
+    },
+    Tool {
+        id: "img-ai-upscale",
+        family: Family::Image,
+        name: "AI Upscale",
+        blurb: "Real-ESRGAN 4× on your GPU (optional install).",
+        bins: &["realesrgan-ncnn-vulkan"],
+        accepts: &["png", "jpg", "jpeg", "webp"],
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "model",
+            label: "Model",
+            options: &[("realesrgan-x4plus", "Photo"), ("realesrgan-x4plus-anime", "Illustration")],
+            default: "realesrgan-x4plus",
+        }],
+        output: Output::File { suffix: "ai4x", ext: |_| "png".into() },
+        // {bindir}: the models ship in a folder next to the binary.
+        build: |j| {
+            vec![Step::Run(
+                "realesrgan-ncnn-vulkan",
+                args!["-i", j.input(), "-o", j.out(), "-s", "4", "-n", j.p("model"), "-m", "{bindir}/models"],
+            )]
+        },
+    },
 ];
+
+/// `identify` the first frame's size into tmp/size.txt; read it back with `size_of`.
+fn measure(j: &Job, image: &str) -> Step {
+    Step::Capture { bin: "magick", args: args!["identify", "-format", "%w %h", format!("{image}[0]")], into: j.tmp.join("size.txt") }
+}
+
+fn size_of(j: &Job) -> Result<(f64, f64), String> {
+    let text = j.read_tmp("size.txt")?;
+    let mut it = text.split_whitespace().filter_map(|v| v.parse::<f64>().ok());
+    it.next().zip(it.next()).ok_or_else(|| format!("unreadable image size `{text}`"))
+}
+
+/// Each area cut out, pixelated, and pasted back where it was.
+fn pixelate_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let (w, h) = size_of(j)?;
+    let mut a = args![j.input(), "-auto-orient"];
+    for [x, y, aw, ah] in parse_areas(j.p("areas"))? {
+        let (px, py) = ((w * x / 100.0).round(), (h * y / 100.0).round());
+        let (pw, ph) = ((w * aw / 100.0).round().max(1.0), (h * ah / 100.0).round().max(1.0));
+        a.extend(args![
+            "(", "+clone", "-crop", format!("{pw}x{ph}+{px}+{py}"), "+repage", "-scale", "6%", "-scale", format!("{pw}x{ph}!"), ")",
+            "-geometry", format!("+{px}+{py}"), "-composite"
+        ]);
+    }
+    a.push(j.out());
+    Ok(vec![Step::Run("magick", a)])
+}
+
+/// What changed: second image stretched to the first's size, absolute difference, contrast up.
+fn diff_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let (w, h) = size_of(j)?;
+    Ok(vec![Step::Run(
+        "magick",
+        args![
+            // sRGB, no alpha: a grey+alpha first image would otherwise colour the whole result.
+            s(&j.inputs[0]), "-alpha", "off", "-colorspace", "sRGB",
+            "(", s(&j.inputs[1]), "-alpha", "off", "-colorspace", "sRGB", "-resize", format!("{w}x{h}!"), ")",
+            "-compose", "difference", "-composite", "-auto-level", j.out()
+        ],
+    )])
+}
+
+fn attach_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let logo = s(&j.inputs[0]);
+    let size: f64 = j.p("size").parse().unwrap_or(15.0);
+    j.inputs[1..]
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let w: f64 = j.read_tmp(&format!("{i}.w"))?.trim().parse().map_err(|_| format!("can't read the size of {}", p.display()))?;
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let (logo_w, margin) = ((w * size / 100.0).round(), (w / 40.0).round());
+            Ok(Step::Run(
+                "magick",
+                args![
+                    s(p), "-auto-orient", "(", logo.clone(), "-resize", format!("{logo_w}x"), ")",
+                    "-gravity", j.p("corner"), "-geometry", format!("+{margin}+{margin}"), "-composite",
+                    s(&j.out.join(name))
+                ],
+            ))
+        })
+        .collect()
+}
+
+/// `Mon Été 2024!` → `mon-ete-2024`.
+pub fn slugify(name: &str) -> String {
+    let folded: String = name
+        .chars()
+        .map(|c| match c {
+            'à' | 'á' | 'â' | 'ä' | 'ã' | 'å' | 'À' | 'Á' | 'Â' | 'Ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+            'î' | 'ï' | 'í' | 'ì' | 'Î' | 'Ï' => 'i',
+            'ô' | 'ö' | 'ó' | 'ò' | 'õ' | 'Ô' | 'Ö' => 'o',
+            'ù' | 'û' | 'ü' | 'ú' | 'Ù' | 'Û' | 'Ü' => 'u',
+            'ç' | 'Ç' => 'c',
+            'ñ' | 'Ñ' => 'n',
+            c => c.to_ascii_lowercase(),
+        })
+        .collect();
+    let slug = folded.split(|c: char| !c.is_ascii_alphanumeric()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join("-");
+    if slug.is_empty() { "image".into() } else { slug }
+}

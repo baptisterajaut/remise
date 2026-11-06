@@ -14,6 +14,7 @@ pub enum Family {
     Video,
     Audio,
     Files,
+    Create,
 }
 
 #[derive(Serialize, Debug)]
@@ -55,6 +56,16 @@ pub enum Output {
     None,
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Inputs {
+    /// One job per dropped file.
+    One,
+    /// All dropped files go into one job (merge, join, archive).
+    Many,
+    /// A generator: no input, params only; the result lands in Downloads.
+    None,
+}
+
 pub struct Tool {
     pub id: &'static str,
     pub family: Family,
@@ -64,14 +75,13 @@ pub struct Tool {
     pub bins: &'static [&'static str],
     /// Lowercase extensions. Empty = anything (files and folders).
     pub accepts: &'static [&'static str],
-    /// All dropped files go into one job (merge, join, archive) instead of one job per file.
-    pub multi: bool,
+    pub inputs: Inputs,
     pub params: &'static [Param],
     pub output: Output,
     pub build: fn(&Job) -> Vec<Step>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Step {
     Run(&'static str, Vec<String>),
     /// Write the sorted list of `dir/*.ext` paths, one per line, to `out`.
@@ -80,6 +90,15 @@ pub enum Step {
     Rename(PathBuf, PathBuf),
     /// Start another app and don't wait for it.
     Launch(&'static str, Vec<String>),
+    /// Run and save stdout to a file, for a later `Then` to read.
+    Capture { bin: &'static str, args: Vec<String>, into: PathBuf },
+    /// Decide the next steps from what earlier steps left in `tmp` (page sizes, file lists…).
+    Then(fn(&Job) -> Result<Vec<Step>, String>),
+    /// Set a file's modification time.
+    Touch(PathBuf, std::time::SystemTime),
+    /// Stop with a message for the user (wrong mix of inputs and such).
+    Fail(String),
+    Copy(PathBuf, PathBuf),
 }
 
 pub struct Job {
@@ -108,9 +127,17 @@ impl Job {
     pub fn stem(&self) -> String {
         stem_of(&self.inputs[0])
     }
+    /// First input with one of these extensions.
+    pub fn pick(&self, exts: &[&str]) -> Option<String> {
+        self.inputs.iter().find(|p| exts.contains(&ext_of(p).as_str())).map(|p| s(p))
+    }
+    /// Reads a file an earlier `Capture`/tool left in `tmp`.
+    pub fn read_tmp(&self, name: &str) -> Result<String, String> {
+        std::fs::read_to_string(self.tmp.join(name)).map_err(|e| format!("{name}: {e}"))
+    }
     /// `<out dir>/<stem><tail>` for printf-style patterns (gs, ffmpeg): `%` in the path is
     /// escaped, `tail` is left alone so it can carry `%03d`.
-    fn out_pattern(&self, tail: &str) -> String {
+    pub fn out_pattern(&self, tail: &str) -> String {
         format!("{}{}", s(&self.out.join(self.stem())).replace('%', "%%"), tail)
     }
 }
@@ -154,6 +181,14 @@ fn ffmpeg(j: &Job, mid: Vec<String>) -> Step {
     Step::Run("ffmpeg", a)
 }
 
+/// `magick <input> <mid…> <out>` with an explicit output (folders, patterns).
+fn magick_to(j: &Job, mid: Vec<String>, out: String) -> Step {
+    let mut a = args![j.input()];
+    a.extend(mid);
+    a.push(out);
+    Step::Run("magick", a)
+}
+
 fn magick(j: &Job, mid: Vec<String>) -> Step {
     let mut a = args![j.input()];
     a.extend(mid);
@@ -184,16 +219,103 @@ const TRIM: &[Param] = &[
 ];
 
 mod audio;
-mod files;
-mod image;
-mod pdf;
+pub mod create;
+pub mod epub;
+pub mod files;
+pub mod image;
+pub mod pdf;
 mod video;
 
 /// Every tool, in wall order.
 pub fn all() -> impl Iterator<Item = &'static Tool> {
-    [pdf::TOOLS, image::TOOLS, video::TOOLS, audio::TOOLS, files::TOOLS].into_iter().flatten()
+    [pdf::TOOLS, image::TOOLS, video::TOOLS, audio::TOOLS, create::TOOLS, files::TOOLS].into_iter().flatten()
 }
 
 pub fn find(id: &str) -> Option<&'static Tool> {
     all().find(|t| t.id == id)
+}
+
+// ───────────────────────────── shared helpers for the newer tools ─────────────────────────────
+
+const HTML: &[&str] = &["html", "htm"];
+const FONTS: &[&str] = &["ttf", "otf"];
+
+/// Areas given as `x,y,w,h` in % of the page/image from the top-left, `;`-separated.
+pub fn parse_areas(spec: &str) -> Result<Vec<[f64; 4]>, String> {
+    let bad = || format!("areas look like `x,y,w,h` in % (e.g. 5,5,40,8; 0,90,100,10), got `{spec}`");
+    spec.split(';')
+        .filter(|a| !a.trim().is_empty())
+        .map(|a| {
+            let n: Vec<f64> = a.split(',').map(|v| v.trim().parse::<f64>()).collect::<Result<_, _>>().map_err(|_| bad())?;
+            match n[..] {
+                [x, y, w, h] if [x, y, w, h].iter().all(|v| (0.0..=100.0).contains(v)) => Ok([x, y, w, h]),
+                _ => Err(bad()),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .and_then(|v| if v.is_empty() { Err(bad()) } else { Ok(v) })
+}
+
+/// A PostScript string literal.
+pub fn ps_str(s: &str) -> String {
+    format!("({})", s.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)"))
+}
+
+/// Ghostscript pass that draws `ps` on top of every page (EndPage code 0 = showpage; any other
+/// code must answer false or gs emits extra blank pages). In `ps`, W and H are the page size
+/// in points and N the 1-based page number.
+fn gs_overlay(j: &Job, device: &str, extra: &[&str], ps: &str) -> Step {
+    let proc = format!(
+        "<< /EndPage {{ 1 index 1 add /N exch def exch pop 0 eq {{ gsave currentpagedevice /PageSize get aload pop \
+         /H exch def /W exch def {ps} grestore true }} {{ false }} ifelse }} >> setpagedevice"
+    );
+    let mut a = args![format!("-sDEVICE={device}")];
+    a.extend(extra.iter().map(|e| e.to_string()));
+    // gs answers 0 even when it drops a page it couldn't draw; make that an error.
+    a.extend(args!["-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.out()), "-c", proc, "-f", j.input()]);
+    Step::Run("gs", a)
+}
+
+/// Headless Chromium/Chrome/Edge with a throwaway profile (a running browser keeps its own).
+fn chromium(j: &Job, input: String, mode: Vec<String>) -> Step {
+    let mut a = args![
+        "--headless",
+        "--disable-gpu",
+        "--hide-scrollbars",
+        "--no-first-run",
+        "--no-default-browser-check",
+        format!("--user-data-dir={}", j.tmp("chrome"))
+    ];
+    a.extend(mode);
+    a.push(input);
+    Step::Run("chromium", a)
+}
+
+/// `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`, read as UTC.
+// CBA: UTC, not local time; a tz crate if people care about the hour
+pub fn parse_date(s: &str) -> Option<std::time::SystemTime> {
+    let (date, time) = s.trim().split_once(' ').unwrap_or((s.trim(), "00:00"));
+    let d: Vec<i64> = date.split('-').map(|x| x.parse().ok()).collect::<Option<_>>()?;
+    let t: Vec<i64> = time.split(':').map(|x| x.parse().ok()).collect::<Option<_>>()?;
+    let [y, m, day]: [i64; 3] = d.try_into().ok()?;
+    let [hh, mm]: [i64; 2] = t.try_into().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&day) || !(0..24).contains(&hh) || !(0..60).contains(&mm) {
+        return None;
+    }
+    // Days from civil (Howard Hinnant), proleptic Gregorian.
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + day - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    let secs = u64::try_from(days * 86_400 + hh * 3600 + mm * 60).ok()?;
+    Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+}
+
+/// Inputs split by kind for tools that take a mix (a PDF and a signature, a video and a logo…).
+fn pair(j: &Job, a: &[&str], b: &[&str], what: &str) -> Result<(String, String), Step> {
+    match (j.pick(a), j.pick(b)) {
+        (Some(x), Some(y)) => Ok((x, y)),
+        _ => Err(Step::Fail(format!("drop {what}"))),
+    }
 }
