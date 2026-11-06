@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Third-party binaries fetched by scripts/vendor.py
+/vendor/
+/vendor-cache/
