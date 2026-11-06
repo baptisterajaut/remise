@@ -119,9 +119,29 @@ imagemagick() {
     cd "$root"
 }
 
+# whisper.cpp ships Linux and Windows binaries, not macOS ones. Static, Metal shaders embedded;
+# GGML_NATIVE off so an Intel build doesn't assume the runner's CPU.
+whisper() {
+    fetch https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz \
+        ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720
+    cd "$work/whisper.cpp-1.9.5"
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF \
+        >/dev/null
+    cmake --build build -j"$jobs" --target whisper-cli >/dev/null
+    local dest=$work/whisper-out
+    mkdir -p "$dest"
+    cp build/bin/whisper-cli LICENSE "$dest/"
+    strip "$dest/whisper-cli"
+    check_links "$dest/whisper-cli"
+    "$dest/whisper-cli" --help >/dev/null 2>&1
+    pack whisper.cpp 1.9.5 "$dest"
+    cd "$root"
+}
+
 ghostscript
 if [[ $target == macos-* ]]; then
     imagemagick
+    whisper
 fi
 # Upstream ships potrace binaries for Linux and Intel Macs only.
 if [[ $target == macos-arm64 ]]; then
