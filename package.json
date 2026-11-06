@@ -18,5 +18,6 @@
     "eslint": "10.14.0",
     "globals": "17.14.0",
     "playwright-core": "1.65.0"
-  }
+  },
+  "packageManager": "pnpm@12.15.0"
 }
