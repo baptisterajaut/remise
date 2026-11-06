@@ -5,6 +5,8 @@ name: Deps
 # replacing an existing asset, so the SHA-256 pinned in vendor.py stays valid.
 on:
   push:
+    # Branches only: GitHub ignores `paths` on tag pushes, so a release tag would rebuild everything.
+    branches: [main]
     paths: [scripts/build-deps.sh, .github/workflows/deps.yml]
   workflow_dispatch:
 

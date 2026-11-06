@@ -69,7 +69,7 @@ Too big for every installer, so the tool's button offers the download, with its 
 |---|---|---|
 | BiRefNet general lite (MIT), as converted by rembg | Remove background | 224 MB |
 | Whisper small, `q5_1` (MIT) | Transcribe | 190 MB |
-| LibreOffice 26.8.2 (MPL-2.0), from The Document Foundation's archive; the LibreItalia AppImage on Linux | Office to PDF | 300–376 MB |
+| LibreOffice 26.8.2 (MPL-2.0), from The Document Foundation's archive; the LibreItalia AppImage on Linux | Office to PDF | 299–376 MB |
 | PdfCraft 0.19.0 (MIT/Apache-2.0), portable builds | PDF Studio | 115–129 MB |
 | chrome-headless-shell 157 (BSD-3-Clause and others), from Chrome for Testing; macOS and Linux only | HTML to PDF / image, when no Chromium browser is installed | 105–128 MB |
 

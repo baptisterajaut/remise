@@ -95,7 +95,7 @@ A few tools need something too big to put in every download. The first time you 
 |---|---|
 | Remove background | an AI model, 224 MB |
 | Transcribe | a speech model, 190 MB |
-| Office to PDF | LibreOffice, 300 to 376 MB |
+| Office to PDF | LibreOffice, 299 to 376 MB |
 | PDF Studio (annotate, sign, fill forms) | [PdfCraft](https://github.com/storytold/pdfcraft), 115 to 129 MB |
 | HTML to PDF, HTML to image | Chromium, 105 to 128 MB, only on a Mac or Linux PC with no Chrome, Edge or Chromium |
 
