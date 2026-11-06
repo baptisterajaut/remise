@@ -272,7 +272,11 @@ PLATFORMS = {
         ("qjs-darwin-arm64", "8be3ddfe3397d2e692e4e1e8972ee9d032a0a580505d2f8b4ea528cf1b651c11"),
     ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42") + ocr_languages()
     + [onnxruntime("onnxruntime-osx-arm64-1.31.1.tgz", "2e1344a1926ee50eb25b38153cb6992c3567515aef0e677a1a520a1798896d6f",
-                   "libonnxruntime.1.31.1.dylib", "libonnxruntime.dylib")],
+                   "libonnxruntime.1.31.1.dylib", "libonnxruntime.dylib")]
+    + macos_built("macos-arm64", gs="7fe2ccb3dbfefc95835f54892b480eeaf6e46a6aea1f31740aa4ce3870e65930",
+                  im="f552ef576011f70ac2b1bb716668c06e8a3e209ec6ade6ccd3ff73aebe41cf37",
+                  whisper_sha="71313d80d30a197d3e210f490d2ffc8399b9f7d30f0e7651335cbcfa7d37136d",
+                  potrace="654a102437b6bc26303e25426df72d6ff7af68c5308e6ebac1c204a869c0f29e"),
     "macos-x64": macos("x64", "amd64/1789931006_9.0.2",
                        "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4",
                        "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481")
@@ -286,9 +290,13 @@ PLATFORMS = {
         ("qjs-darwin-x86_64", "9e5e101b4fd13cda3204222ca9f8be35412c41dcdef3745829633b7a67245412"),
     ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42") + ocr_languages()
     + [onnxruntime("onnxruntime-osx-x86_64-1.23.2.tgz", "d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6",
-                   "libonnxruntime.1.23.2.dylib", "libonnxruntime.dylib", version="1.23.2")],
+                   "libonnxruntime.1.23.2.dylib", "libonnxruntime.dylib", version="1.23.2")]
+    + macos_built("macos-x64", gs="5c2864e0aa460e78be18961d56d0718bc440706ff03b2dfd57f98f5131418a37",
+                  im="4f603d8d557c357e405d1abdcf7e8d458fcb432b4e42a96ebf7e8da4dd3e6780",
+                  whisper_sha="a9b609730b859460f34e4bc13aed6436ff2cbcfb9696cefac9fd7523502332c7"),
     # AppImage. BtbN keeps month-end autobuilds, so this tag doesn't vanish like the dailies.
     "linux-x64": [
+        ghostscript("linux-x64", "4f3f0cd02a6457c40e3caea91fe2b9cef132da73fa12df38d948a40f7555e51c"),
         imagemagick_linux(),
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
              sha256="db367d897829f22c4198ce1094143c9d467bd6ee7dfabc44ba6f02056b24f8b1",
