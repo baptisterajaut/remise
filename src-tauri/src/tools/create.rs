@@ -144,7 +144,7 @@ pub static TOOLS: &[Tool] = &[
         id: "create-html-image",
         family: Family::Create,
         name: "HTML to image",
-        blurb: "Screenshot of a web page file (needs Chrome, Edge or Chromium).",
+        blurb: "Screenshot of a web page file, rendered by your browser.",
         bins: &["chromium"],
         accepts: HTML,
         inputs: Inputs::One,

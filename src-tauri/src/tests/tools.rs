@@ -56,21 +56,24 @@ fn merge_keeps_drop_order() {
 }
 
 #[test]
-fn ocr_pdf_rasterizes_lists_then_recognizes() {
-    let steps = job("pdf-ocr", &["/d/scan.pdf"], "/d/scan.ocr.pdf", &[("lang", "fra")]);
-    assert_eq!(steps.len(), 3);
-    assert!(matches!(steps[1], Step::ListDir { ext: "png", .. }));
-    let (bin, a) = run_args(&steps[2]);
-    assert_eq!(bin, "tesseract");
-    let list = s(&PathBuf::from("/tmp/job").join("pages.txt"));
-    assert_eq!(a, [list.as_str(), "/d/scan.ocr", "-l", "fra", "pdf"]);
+fn ocr_pdf_is_one_ghostscript_pass() {
+    let steps = job("pdf-ocr", &["/d/scan.pdf"], "/d/scan.ocr.pdf", &[("lang", "eng+fra")]);
+    assert_eq!(steps.len(), 1);
+    let (bin, a) = run_args(&steps[0]);
+    assert_eq!(bin, "gs");
+    for want in ["-sDEVICE=pdfocr24", "-r300", "-sOCRLanguage=eng+fra", "-sOutputFile=/d/scan.ocr.pdf", "/d/scan.pdf"] {
+        assert!(a.contains(&want), "{want} in {a:?}");
+    }
 }
 
 #[test]
-fn ocr_image_is_a_single_tesseract_call() {
+fn ocr_image_goes_through_a_pdf_page() {
     let steps = job("pdf-ocr", &["/d/photo.jpg"], "/d/photo.ocr.pdf", &[]);
-    let (_, a) = run_args(&steps[0]);
-    assert_eq!(a, ["/d/photo.jpg", "/d/photo.ocr", "-l", "eng", "pdf"]);
+    assert_eq!(steps.len(), 2);
+    assert_eq!(run_args(&steps[0]).0, "magick");
+    let (bin, a) = run_args(&steps[1]);
+    assert_eq!(bin, "gs");
+    assert!(a.contains(&"-sOCRLanguage=eng"));
 }
 
 #[test]

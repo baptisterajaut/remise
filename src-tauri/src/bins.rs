@@ -50,6 +50,8 @@ fn aliases(bin: &str) -> Vec<&str> {
         ],
         "gs" => vec!["gs", "gswin64c", "gswin32c"],
         "7z" => vec!["7z", "7zz", "7za", "7zzs"],
+        // A library, not a program: vendor.py gives it this name on each OS.
+        "onnxruntime" => vec!["libonnxruntime.so", "libonnxruntime.dylib", "onnxruntime.dll"],
         other => vec![other],
     }
 }
@@ -91,7 +93,11 @@ fn search_dirs() -> Vec<PathBuf> {
 
 /// First directory wins, so a bundled copy beats anything installed.
 pub fn which(bin: &str) -> Option<PathBuf> {
-    find_in(&search_dirs(), bin)
+    // Remise itself, run as a helper (`--cutout`). Tests point REMISE_SELF at the built app.
+    if bin == "remise" {
+        return std::env::var_os("REMISE_SELF").map(PathBuf::from).or_else(|| std::env::current_exe().ok());
+    }
+    crate::fetch::installed(bin).or_else(|| find_in(&search_dirs(), bin))
 }
 
 pub fn find_in(dirs: &[PathBuf], bin: &str) -> Option<PathBuf> {
@@ -101,7 +107,7 @@ pub fn find_in(dirs: &[PathBuf], bin: &str) -> Option<PathBuf> {
 
 /// The program to run for `bin` and the arguments to give it.
 /// ImageMagick 6 (Ubuntu 22.04/24.04, Debian 12) has no `magick`: `convert` and `montage` instead.
-// CBA: IM6's distro policy.xml still forbids PDF writes (Images to PDF); bundling the IM7 AppImage is the upgrade path
+/// Only a dev build without vendor/ gets there; the installers ship ImageMagick 7.
 pub fn resolve(bin: &str, args: &[String]) -> Option<(PathBuf, Vec<String>)> {
     if let Some(p) = which(bin) {
         return Some((p, args.to_vec()));
@@ -137,7 +143,12 @@ pub fn command(path: &Path) -> Command {
         if let Ok(joined) = std::env::join_paths(bundled.chain(path)) {
             c.env("PATH", joined);
         }
-        let env = [("TESSDATA_PREFIX", "tesseract/tessdata"), ("MAGICK_GHOSTSCRIPT_PATH", "ghostscript/bin")];
+        let env = [
+            ("TESSDATA_PREFIX", "tessdata"),
+            ("MAGICK_GHOSTSCRIPT_PATH", "ghostscript/bin"),
+            // The macOS build; the Linux AppRun and the Windows portable build find their own.
+            ("MAGICK_CONFIGURE_PATH", "imagemagick/config"),
+        ];
         for (key, sub) in env {
             if v.join(sub).is_dir() {
                 c.env(key, v.join(sub));

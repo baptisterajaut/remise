@@ -129,36 +129,12 @@ pub static TOOLS: &[Tool] = &[
         family: Family::Pdf,
         name: "OCR",
         blurb: "Turn scans and photos into a searchable PDF.",
-        bins: &["gs", "tesseract"],
+        bins: &["gs", "magick"],
         accepts: PDF_IMG,
         inputs: Inputs::One,
         params: &[Param::Text { key: "lang", label: "Languages", default: "eng", placeholder: "eng+fra" }],
         output: Output::File { suffix: "ocr", ext: |_| "pdf".into() },
-        build: |j| {
-            // Tesseract appends ".pdf" to the output base itself.
-            let base = s(&j.out.with_extension(""));
-            if j.in_ext() != "pdf" {
-                return vec![Step::Run("tesseract", args![j.input(), base, "-l", j.p("lang"), "pdf"])];
-            }
-            let list = j.tmp.join("pages.txt");
-            vec![
-                Step::Run(
-                    "gs",
-                    args![
-                        "-sDEVICE=png16m",
-                        "-r300",
-                        "-dNOPAUSE",
-                        "-dBATCH",
-                        "-dQUIET",
-                        "-dPDFSTOPONERROR",
-                        gs_out(&j.tmp("p-%04d.png")),
-                        j.input()
-                    ],
-                ),
-                Step::ListDir { dir: j.tmp.clone(), ext: "png", out: list.clone() },
-                Step::Run("tesseract", args![s(&list), base, "-l", j.p("lang"), "pdf"]),
-            ]
-        },
+        build: |j| ocr(j, "pdfocr24"),
     },
     Tool {
         id: "pdf-to-images",
@@ -306,7 +282,7 @@ pub static TOOLS: &[Tool] = &[
         id: "pdf-studio",
         family: Family::Pdf,
         name: "PDF Studio",
-        blurb: "Annotate, sign, redact, reorder — opens in PdfCraft.",
+        blurb: "Annotate, sign, fill forms, reorder: opens in PdfCraft.",
         bins: &["pdfcraft"],
         accepts: PDF,
         inputs: Inputs::One,
@@ -581,7 +557,7 @@ pub static TOOLS: &[Tool] = &[
         id: "pdf-html",
         family: Family::Pdf,
         name: "HTML to PDF",
-        blurb: "A web page file printed to PDF (needs Chrome, Edge or Chromium).",
+        blurb: "A web page file printed to PDF by your browser.",
         bins: &["chromium"],
         accepts: HTML,
         inputs: Inputs::One,
@@ -647,7 +623,7 @@ pub static TOOLS: &[Tool] = &[
         id: "pdf-office",
         family: Family::Pdf,
         name: "Office to PDF",
-        blurb: "Word, Excel, PowerPoint and LibreOffice files to PDF (needs LibreOffice).",
+        blurb: "Word, Excel, PowerPoint and LibreOffice files to PDF, laid out by LibreOffice.",
         bins: &["soffice"],
         accepts: &["doc", "docx", "odt", "rtf", "xls", "xlsx", "ods", "csv", "ppt", "pptx", "odp"],
         inputs: Inputs::One,
@@ -688,4 +664,28 @@ pub fn to_markdown(title: &str, pages: &[String]) -> String {
         }
     }
     md
+}
+
+/// Ghostscript's built-in Tesseract (`pdfocr24`: a searchable PDF, `ocr`: plain text), pages
+/// rendered at 300 dpi. An image first becomes a one-page PDF at 300 dpi, so it is read 1:1.
+pub fn ocr(j: &Job, device: &str) -> Vec<Step> {
+    let mut steps = vec![];
+    let mut pdf = j.input();
+    if j.in_ext() != "pdf" {
+        pdf = j.tmp("scan.pdf");
+        steps.push(Step::Run("magick", args![j.input(), "-units", "PixelsPerInch", "-density", "300", pdf.clone()]));
+    }
+    let a = args![
+        format!("-sDEVICE={device}"),
+        "-r300",
+        format!("-sOCRLanguage={}", j.p("lang")),
+        "-dNOPAUSE",
+        "-dBATCH",
+        "-dQUIET",
+        "-dPDFSTOPONERROR",
+        gs_out(&j.out()),
+        pdf
+    ];
+    steps.push(Step::Run("gs", a));
+    steps
 }

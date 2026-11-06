@@ -1,5 +1,5 @@
 //! Every tool against the real binaries, on fixtures generated here.
-//! Needs gs, qpdf, tesseract, ffmpeg, magick, 7z and potrace (PATH or REMISE_VENDOR).
+//! Needs gs (built with OCR), qpdf, ffmpeg, magick, 7z and potrace (PATH or REMISE_VENDOR).
 
 use crate::bins::{command, resolve};
 use crate::runner::{StepReq, run_chain};
@@ -295,6 +295,46 @@ fn smoke_ffmpeg_reports_progress() {
     let _ = fs::remove_dir_all(&fx.dir);
 }
 
+/// The first-use downloads for real (REMISE_USER_TOOLS must point at a scratch folder), then the
+/// tools that need them: Transcribe everywhere, and HTML to PDF with the downloaded Chromium
+/// where there is one to download (Linux, macOS).
+#[test]
+#[ignore]
+fn smoke_downloads_then_use_them() {
+    let Some(root) = crate::bins::user_tools() else {
+        println!("skip (set REMISE_USER_TOOLS to a scratch folder)");
+        return;
+    };
+    let fx = fixtures("downloads");
+    let model = crate::fetch::find("whisper-model").unwrap();
+    crate::fetch::fetch(&|_| {}, model).unwrap();
+    let out = go("vid-transcribe", &[&fx.mp4], &[("lang", "en")], &fx.dir).unwrap();
+    assert!(Path::new(&out[0]).is_file(), "{out:?}");
+    if let Some(browser) = crate::fetch::find("chromium") {
+        let exe = crate::fetch::fetch(&|_| {}, browser).unwrap();
+        assert!(exe.starts_with(root) && crate::bins::which("chromium") == Some(exe));
+        let pdf = go("pdf-html", &[&fx.html], &[], &fx.dir).unwrap();
+        assert!(fs::read(&pdf[0]).unwrap().starts_with(b"%PDF"));
+    }
+    crate::fetch::fetch(&|_| {}, crate::fetch::find("soffice").unwrap()).unwrap();
+    let pdf = go("pdf-office", &[&fx.docx], &[], &fx.dir).unwrap();
+    assert!(fs::read(&pdf[0]).unwrap().starts_with(b"%PDF"), "LibreOffice, downloaded and unpacked, converts");
+    // PdfCraft only opens a window; check it lands, unpacked from its zip / tar.gz / dmg.
+    let editor = crate::fetch::fetch(&|_| {}, crate::fetch::find("pdfcraft").unwrap()).unwrap();
+    assert!(editor.is_file() && crate::bins::which("pdfcraft") == Some(editor));
+    // Background removal runs the app itself as a helper: REMISE_SELF is the built `remise`.
+    if std::env::var_os("REMISE_SELF").is_some() {
+        crate::fetch::fetch(&|_| {}, crate::fetch::find("bg-model").unwrap()).unwrap();
+        let png = go("img-remove-bg", &[&fx.png2], &[], &fx.dir).unwrap();
+        let (magick, args) = resolve("magick", &["identify".into(), "-format".into(), "%[channels]".into(), png[0].clone()]).unwrap();
+        let channels = command(&magick).args(&args).output().unwrap().stdout;
+        assert!(String::from_utf8_lossy(&channels).contains('a'), "the cut-out has an alpha channel");
+    } else {
+        println!("skip img-remove-bg (set REMISE_SELF to the built app)");
+    }
+    let _ = fs::remove_dir_all(&fx.dir);
+}
+
 /// A document's own images make it through Pandoc's sandbox; anything pointing elsewhere on the
 /// disk (absolute path, `..`, `file://`, raw HTML, a YAML `css:`) or isn't an image does not.
 #[test]
@@ -325,6 +365,8 @@ fn smoke_pandoc_keeps_own_images_only() {
 #[test]
 #[ignore]
 fn manifest() {
-    let Some(path) = std::env::var_os("REMISE_MANIFEST") else { return };
+    let Some(path) = std::env::var_os("REMISE_MANIFEST") else {
+        return;
+    };
     fs::write(path, serde_json::to_string_pretty(&crate::list_tools()).unwrap()).unwrap();
 }

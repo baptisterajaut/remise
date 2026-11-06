@@ -22,12 +22,27 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 const mock = `
 window.__listeners = {};
 window.__TAURI__ = {
-  core: { invoke: async (cmd, args) => (cmd === "list_tools" ? ${manifest} : window.__run(args)) },
+  core: {
+    invoke: async (cmd, args) => {
+      if (cmd === "list_tools") return ${manifest}.map((t) => ({ ...t, missing: window.__missing[t.id] ?? [] }));
+      if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129 } };
+      if (cmd === "download") return window.__download(args);
+      return window.__run(args);
+    },
+  },
   event: { listen: async (name, cb) => { window.__listeners[name] = cb; return () => {}; } },
   webview: { getCurrentWebview: () => ({ onDragDropEvent: async (cb) => { window.__drag = cb; } }) },
   dialog: { open: async () => null },
   opener: { revealItemInDir: async (p) => { window.__revealed = p; } },
 };
+// HTML to PDF starts without a browser, which Remise can download.
+window.__missing = { "pdf-html": ["chromium"] };
+window.__downloads = [];
+window.__download = ({ bin }) => new Promise((res) => {
+  window.__downloads.push(bin);
+  window.__listeners.progress({ payload: { job: "dl-" + bin, step: 0, steps: 1, pct: 0.5 } });
+  setTimeout(() => { window.__missing = {}; res(); }, 150);
+});
 window.__runs = [];
 window.__run = (args) => new Promise((res, rej) => {
   window.__runs.push(args);
@@ -143,6 +158,19 @@ async function generatorFlow(page, shot) {
   assert.ok(names.includes("Device mockup") && !names.includes("Gradient") && !names.includes("QR code"));
 }
 
+async function downloadFlow(page, shot) {
+  await page.getByRole("button", { name: "show all" }).click();
+  await page.getByRole("button", { name: /^Everything/ }).click();
+  await page.getByRole("button", { name: /HTML to PDF/ }).click();
+  const run = page.locator("#run");
+  assert.equal(await run.textContent(), "Download Chromium (129 MB)");
+  await run.click();
+  await page.waitForFunction(() => document.getElementById("run").textContent.startsWith("Downloading… 50"));
+  await shot("downloading");
+  await page.waitForFunction(() => document.getElementById("run").textContent === "Run");
+  assert.deepEqual(await page.evaluate(() => window.__downloads), ["chromium"]);
+}
+
 for (const scheme of ["light", "dark"]) {
   const { browser, page, errors, shot } = await open(scheme);
   await shot("wall");
@@ -150,6 +178,7 @@ for (const scheme of ["light", "dark"]) {
   await wallFlow(page, shot);
   await chainFlow(page, shot);
   await generatorFlow(page, shot);
+  await downloadFlow(page, shot);
   await browser.close();
   assert.deepEqual(errors, [], "no console errors");
   console.log(`ui ${scheme}: ok`);

@@ -102,13 +102,22 @@ fn drain_stdout(stdout: ChildStdout, on_progress: impl Fn(f64)) -> String {
     Vec::from(tail).join("\n")
 }
 
+/// `{bindir}`: data that ships next to a tool's binary (waifu2x models). A whole argument
+/// `{which:NAME}`: where another program or a downloaded model is.
+fn expand(arg: &str, bindir: &str) -> String {
+    let arg = arg.replace("{bindir}", bindir);
+    match arg.strip_prefix("{which:").and_then(|name| name.strip_suffix('}')) {
+        Some(name) => which(name).map(|p| tools::s(&p)).unwrap_or(arg),
+        None => arg,
+    }
+}
+
 /// Runs one binary to completion. ffmpeg gets a real progress percentage.
 // CBA: no cancel; keeping the Child in a job table + a `cancel` command if long video jobs need it
 fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>) -> Result<(), String> {
     let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
-    // `{bindir}`: data that ships next to a tool's binary (Real-ESRGAN models).
     let bindir = path.parent().map(tools::s).unwrap_or_default();
-    let args: Vec<String> = args.iter().map(|a| a.replace("{bindir}", &bindir)).collect();
+    let args: Vec<String> = args.iter().map(|a| expand(a, &bindir)).collect();
     let mut cmd = command(&path);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
@@ -132,18 +141,6 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
     }
     let msg = [last_lines(&stderr, 6), stdout].into_iter().find(|m| !m.is_empty());
     Err(msg.unwrap_or_else(|| format!("{bin} failed ({status})")))
-}
-
-fn list_dir(dir: &Path, ext: &str, out: &Path) -> Result<(), String> {
-    let mut files: Vec<String> = fs::read_dir(dir)
-        .map_err(|e| e.to_string())?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|f| tools::ext_of(f) == ext)
-        .map(|f| tools::s(&f))
-        .collect();
-    files.sort();
-    fs::write(out, files.join("\n") + "\n").map_err(|e| e.to_string())
 }
 
 /// Runs a binary and saves its stdout, for a later `Then` to read.
@@ -193,7 +190,6 @@ fn run_step(emit: Emit, p: &Progress, job: &Job, step: Step, produced: &mut Vec<
             produced.push(path);
             Ok(())
         }
-        Step::ListDir { dir, ext, out } => list_dir(&dir, ext, &out),
         Step::Write(path, body) => fs::write(path, body).map_err(|e| e.to_string()),
         Step::Rename(from, to) => {
             rename(&from, &to)?;
@@ -289,6 +285,7 @@ impl Chain<'_> {
 fn scratch_dir(job_id: &str) -> Result<PathBuf, String> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let dir = std::env::temp_dir().join(format!("remise-{}-{job_id}-{nanos:x}", std::process::id()));
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {

@@ -117,13 +117,26 @@ pub static TOOLS: &[Tool] = &[
         id: "img-remove-bg",
         family: Family::Image,
         name: "Remove background",
-        blurb: "Local AI cut-out (rembg). Transparent PNG.",
-        bins: &["rembg"],
+        blurb: "AI cut-out on this machine. Transparent PNG.",
+        bins: &["magick", "remise", "onnxruntime", "bg-model"],
         accepts: IMG,
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "cutout", ext: |_| "png".into() },
-        build: |j| vec![Step::Run("rembg", args!["i", j.input(), j.out()])],
+        // Upright copy and the model's 1024² RGB input, the mask (cutout.rs), then the mask
+        // stretched back over the copy as its alpha.
+        build: |j| {
+            let (src, rgb, mask) = (j.tmp("src.png"), j.tmp("in.rgb"), j.tmp("mask.gray"));
+            vec![
+                Step::Run(
+                    "magick",
+                    args![j.input(), "-auto-orient", "-write", src.clone(), "-resize", "1024x1024!", "-depth", "8", format!("RGB:{rgb}")],
+                ),
+                measure(j, &src),
+                Step::Run("remise", args!["--cutout", "{which:onnxruntime}", "{which:bg-model}", rgb, mask]),
+                Step::Then(cutout_plan),
+            ]
+        },
     },
     Tool {
         id: "img-vectorize",
@@ -390,7 +403,9 @@ pub static TOOLS: &[Tool] = &[
         }],
         output: Output::File { suffix: "compare", ext: |_| "png".into() },
         build: |j| {
-            let [a, b] = &j.inputs[..] else { return vec![Step::Fail("drop exactly two images".into())] };
+            let [a, b] = &j.inputs[..] else {
+                return vec![Step::Fail("drop exactly two images".into())];
+            };
             if j.p("mode") == "diff" {
                 return vec![measure(j, &s(a)), Step::Then(diff_plan)];
             }
@@ -467,15 +482,38 @@ pub static TOOLS: &[Tool] = &[
         family: Family::Image,
         name: "Extract text",
         blurb: "Read the text out of a photo or screenshot (OCR).",
-        bins: &["tesseract"],
+        bins: &["gs", "magick"],
         accepts: &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp"],
         inputs: Inputs::One,
         params: &[Param::Text { key: "lang", label: "Languages", default: "eng", placeholder: "eng+fra" }],
         output: Output::File { suffix: "text", ext: |_| "txt".into() },
-        // Tesseract appends ".txt" to the output base itself.
-        build: |j| vec![Step::Run("tesseract", args![j.input(), s(&j.out.with_extension("")), "-l", j.p("lang"), "txt"])],
+        build: |j| super::pdf::ocr(j, "ocr"),
     },
 ];
+
+fn cutout_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let (w, h) = size_of(j)?;
+    let side = crate::cutout::SIDE;
+    let a = args![
+        j.tmp("src.png"),
+        "(",
+        "-size",
+        format!("{side}x{side}"),
+        "-depth",
+        "8",
+        format!("gray:{}", j.tmp("mask.gray")),
+        "-resize",
+        format!("{w}x{h}!"),
+        ")",
+        "-alpha",
+        "off",
+        "-compose",
+        "CopyOpacity",
+        "-composite",
+        j.out()
+    ];
+    Ok(vec![Step::Run("magick", a)])
+}
 
 pub fn waifu2x_args(j: &Job, gpu: Option<&str>) -> Vec<String> {
     let mut a = args!["-i", j.input(), "-o", j.out(), "-s", j.p("scale"), "-n", "-1", "-m", "{bindir}/models-upconv_7_photo", "-f", "png"];

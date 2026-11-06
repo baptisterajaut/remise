@@ -375,33 +375,53 @@ pub static TOOLS: &[Tool] = &[
         id: "vid-transcribe",
         family: Family::Video,
         name: "Transcribe",
-        blurb: "Speech to subtitles with Whisper, on this machine (optional install).",
-        bins: &["whisper"],
+        blurb: "Speech to subtitles with Whisper, on this machine.",
+        bins: &["ffmpeg", "whisper-cli", "whisper-model"],
         accepts: AV,
         inputs: Inputs::One,
         params: &[
             Param::Select {
-                key: "model",
-                label: "Model",
-                options: &[("tiny", "Fast"), ("base", "Balanced"), ("small", "Accurate")],
-                default: "base",
-            },
-            Param::Select {
                 key: "lang",
                 label: "Language",
-                options: &[("auto", "Detect"), ("en", "English"), ("fr", "French"), ("es", "Spanish"), ("de", "German")],
+                options: &[
+                    ("auto", "Detect"),
+                    ("en", "English"),
+                    ("fr", "French"),
+                    ("es", "Spanish"),
+                    ("de", "German"),
+                    ("it", "Italian"),
+                    ("pt", "Portuguese"),
+                    ("nl", "Dutch"),
+                ],
                 default: "auto",
             },
             Param::Select { key: "format", label: "As", options: &[("srt", "SRT"), ("txt", "Text"), ("vtt", "WebVTT")], default: "srt" },
         ],
         output: Output::File { suffix: "transcript", ext: fmt },
+        // whisper.cpp reads 16 kHz mono WAV, and adds the extension to `-of` itself.
         build: |j| {
-            let mut a = args![j.input(), "--model", j.p("model"), "--output_format", j.p("format"), "--output_dir", s(&j.tmp)];
-            if j.p("lang") != "auto" {
-                a.extend(args!["--language", j.p("lang")]);
-            }
-            let written = j.tmp.join(format!("{}.{}", j.stem(), j.p("format")));
-            vec![Step::Run("whisper", a), Step::Rename(written, j.out.clone())]
+            let wav = j.tmp("speech.wav");
+            let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+            vec![
+                Step::Run("ffmpeg", args!["-i", j.input(), "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav.clone()]),
+                Step::Run(
+                    "whisper-cli",
+                    args![
+                        "-m",
+                        "{which:whisper-model}",
+                        "-f",
+                        wav,
+                        "-l",
+                        j.p("lang"),
+                        format!("-o{}", j.p("format")),
+                        "-of",
+                        s(&j.out.with_extension("")),
+                        "-t",
+                        threads.to_string(),
+                        "-np"
+                    ],
+                ),
+            ]
         },
     },
     Tool {
@@ -416,8 +436,12 @@ pub static TOOLS: &[Tool] = &[
         output: Output::File { suffix: "inserted", ext: |_| "mp4".into() },
         // CBA: both clips need an audio track, and the clip is forced to 25 fps to match
         build: |j| {
-            let [main, clip] = &j.inputs[..] else { return vec![Step::Fail("drop the main video, then one clip".into())] };
-            let Ok(at) = j.p("at").trim().parse::<f64>() else { return vec![Step::Fail("the insert time is a number of seconds".into())] };
+            let [main, clip] = &j.inputs[..] else {
+                return vec![Step::Fail("drop the main video, then one clip".into())];
+            };
+            let Ok(at) = j.p("at").trim().parse::<f64>() else {
+                return vec![Step::Fail("the insert time is a number of seconds".into())];
+            };
             let fc = format!(
                 "[0:v]split=3[m1][m2][mr];[0:a]asplit[a1][a2];\
                  [m1]trim=0:{at},setpts=PTS-STARTPTS,setsar=1[v0];[a1]atrim=0:{at},asetpts=PTS-STARTPTS[x0];\

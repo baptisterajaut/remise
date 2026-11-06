@@ -117,10 +117,12 @@ fn attach_to_each_puts_the_page_where_asked() {
 }
 
 #[test]
-fn image_text_lets_tesseract_add_the_extension() {
+fn image_text_reads_the_image_as_a_300_dpi_page() {
     let steps = job("img-text", &["/d/shot.png"], &[("lang", "fra")]);
-    let Step::Run("tesseract", a) = &steps[0] else { panic!("{steps:?}") };
-    assert_eq!(a, &["/d/shot.png", "/out/x", "-l", "fra", "txt"]);
+    let [Step::Run("magick", m), Step::Run("gs", g)] = &steps[..] else { panic!("{steps:?}") };
+    assert_eq!(m[1..5], ["-units", "PixelsPerInch", "-density", "300"]);
+    assert!(g.contains(&"-sDEVICE=ocr".to_string()) && g.contains(&"-sOCRLanguage=fra".to_string()));
+    assert_eq!(g.last(), m.last(), "gs reads the page magick wrote");
 }
 
 #[test]

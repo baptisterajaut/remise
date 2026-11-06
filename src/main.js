@@ -20,16 +20,15 @@ const famColor = (f) => `var(--${f})`;
 const PRODUCTS = {
   gs: ["Ghostscript", "ghostscript"],
   magick: ["ImageMagick", "imagemagick"],
-  tesseract: ["Tesseract", "tesseract"],
   qpdf: ["qpdf", "qpdf"],
   ffmpeg: ["FFmpeg", "ffmpeg"],
   "7z": ["7-Zip", "7zip"],
   potrace: ["Potrace", "potrace"],
-  rembg: ["rembg", null],
+  onnxruntime: ["ONNX Runtime", null],
   pdfcraft: ["PdfCraft", null],
-  chromium: ["Chrome, Edge or Chromium", null],
+  chromium: ["a Chromium browser", null],
   "yt-dlp": ["yt-dlp", "yt-dlp"],
-  whisper: ["Whisper", null],
+  "whisper-cli": ["whisper.cpp", null],
   "waifu2x-ncnn-vulkan": ["waifu2x", null],
   soffice: ["LibreOffice", null],
   pandoc: ["Pandoc", "pandoc"],
@@ -37,16 +36,16 @@ const PRODUCTS = {
 };
 /** Optional tools that don't come from a package manager. */
 const EXTRA_HINTS = {
-  rembg: "pipx install rembg[cli]",
-  whisper: "pipx install openai-whisper",
-  pdfcraft: "PdfCraft: github.com/storytold/pdfcraft",
   chromium: "Any of Google Chrome, Microsoft Edge or Chromium",
-  soffice: "LibreOffice: libreoffice.org/download",
   "waifu2x-ncnn-vulkan": "waifu2x: github.com/nihui/waifu2x-ncnn-vulkan (unzip, keep models-upconv_7_photo/ next to it)",
 };
-const product = (bin) => PRODUCTS[bin]?.[0] ?? bin;
+const product = (bin) => PRODUCTS[bin]?.[0] ?? state.downloads[bin]?.name ?? bin;
+
+/** Bins Remise can fetch itself (big browsers and models), by name: { name, mb }. */
+const fetchable = (bins) => bins.length > 0 && bins.every((b) => state.downloads[b]);
 
 function installHint(bins) {
+  if (fetchable(bins)) return `Remise downloads it for you, once: ${bins.map((b) => `${state.downloads[b].name}, ${state.downloads[b].mb} MB`).join("; ")}.`;
   const pkgs = bins.map((b) => PRODUCTS[b]?.[1]).filter(Boolean);
   const extra = bins.map((b) => EXTRA_HINTS[b]).filter(Boolean);
   const mgr = /Mac/.test(navigator.userAgent) ? "brew install" : /Win/.test(navigator.userAgent) ? "winget install" : "sudo apt install";
@@ -56,6 +55,8 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   tools: [],
+  downloads: {},
+  fetching: null, // { pct } while a download runs
   family: "all",
   query: "",
   dropped: null, // paths dropped on the wall, used to filter tools that fit
@@ -345,13 +346,37 @@ function rowView(r) {
 function renderRows() {
   const b = state.bench;
   $("files").replaceChildren(...b.rows.map(rowView));
-  const missing = benchTools().flatMap((t) => t.missing);
+  const missing = [...new Set(benchTools().flatMap((t) => t.missing))];
   const run = $("run");
-  const generator = b.tool?.generator;
-  run.disabled = b.running || missing.length > 0 || (!generator && !b.rows.some((r) => r.state === "queued"));
-  const idle = generator ? "Make it" : "Run";
-  run.textContent = missing.length ? `Needs ${[...new Set(missing)].map(product).join(", ")}` : b.running ? "Running…" : idle;
-  run.title = missing.length ? installHint([...new Set(missing)]) : "";
+  const ready = b.tool?.generator || b.rows.some((r) => r.state === "queued");
+  run.disabled = b.running || state.fetching || (missing.length ? !fetchable(missing) : !ready);
+  run.textContent = runLabel(missing);
+  run.title = missing.length ? installHint(missing) : "";
+}
+
+function runLabel(missing) {
+  if (state.fetching) return `Downloading… ${Math.round((state.fetching.pct ?? 0) * 100)} %`;
+  if (fetchable(missing)) return `Download ${missing.map((m) => state.downloads[m].name).join(" + ")} (${missing.reduce((n, m) => n + state.downloads[m].mb, 0)} MB)`;
+  if (missing.length) return `Needs ${missing.map(product).join(", ")}`;
+  if (state.bench.running) return "Running…";
+  return state.bench.tool?.generator ? "Make it" : "Run";
+}
+
+/** Fetch what the open tool is missing, then pick the tools up again with it found. */
+async function fetchMissing() {
+  const b = state.bench;
+  state.fetching = { pct: 0 };
+  renderRows();
+  try {
+    for (const bin of new Set(benchTools().flatMap((t) => t.missing))) await invoke("download", { bin });
+    toast("Downloaded. It stays on this computer, no need to do it again.");
+  } catch (e) {
+    toast(String(e));
+  }
+  state.fetching = null;
+  state.tools = await invoke("list_tools");
+  if (b.tool) b.tool = toolById(b.tool.id);
+  renderRows();
 }
 
 async function runRow(r) {
@@ -371,6 +396,7 @@ async function runRow(r) {
 
 async function runAll() {
   const b = state.bench;
+  if (benchTools().some((t) => t.missing.length)) return fetchMissing();
   if (b.tool?.generator) b.rows.push(row([]));
   b.running = true;
   // Sequential on purpose: these tools already use every core.
@@ -382,6 +408,10 @@ async function runAll() {
 }
 
 function onProgress({ payload }) {
+  if (payload.job.startsWith("dl-")) {
+    if (state.fetching) state.fetching.pct = payload.pct;
+    return state.bench && renderRows();
+  }
   const r = state.bench?.rows.find((x) => x.id === payload.job);
   if (!r || r.state !== "running") return;
   r.step = payload.step;
@@ -522,6 +552,7 @@ function onKey(e) {
 
 async function init() {
   state.tools = await invoke("list_tools");
+  state.downloads = await invoke("downloads");
   $("tool-count").textContent = state.tools.length;
   $("search").addEventListener("input", (e) => {
     state.query = e.target.value;

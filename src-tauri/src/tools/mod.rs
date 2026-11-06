@@ -77,12 +77,6 @@ pub enum Step {
     Run(&'static str, Vec<String>),
     /// Same, from inside `dir` (tools that write relative paths, like Pandoc's extracted media).
     RunIn(PathBuf, &'static str, Vec<String>),
-    /// Write the sorted list of `dir/*.ext` paths, one per line, to `out`.
-    ListDir {
-        dir: PathBuf,
-        ext: &'static str,
-        out: PathBuf,
-    },
     Write(PathBuf, String),
     Rename(PathBuf, PathBuf),
     /// Start another app and don't wait for it.

@@ -21,6 +21,7 @@ let n = 0;
 window.__TAURI__ = {
   core: { invoke: async (cmd, args) => {
     if (cmd === "list_tools") return ${manifest};
+    if (cmd === "downloads") return {};
     const i = n++;
     if (i === 0) return [args.inputs[0].replace(/\\.(\\w+)$/, ".compressed.mp4")];
     setTimeout(() => window.__listeners.progress({ payload: { job: args.job, step: 0, steps: 1, pct: 0.64 } }), 50);
