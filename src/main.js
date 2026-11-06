@@ -13,6 +13,28 @@ const FAMILIES = [
   ["files", "Files", "var(--files)"],
 ];
 const famColor = (f) => `var(--${f})`;
+
+/** Binary → [product name, package name for brew/apt]. */
+const PRODUCTS = {
+  gs: ["Ghostscript", "ghostscript"],
+  magick: ["ImageMagick", "imagemagick"],
+  tesseract: ["Tesseract", "tesseract"],
+  qpdf: ["qpdf", "qpdf"],
+  ffmpeg: ["FFmpeg", "ffmpeg"],
+  "7z": ["7-Zip", "7zip"],
+  potrace: ["Potrace", "potrace"],
+  rembg: ["rembg", null],
+  pdfcraft: ["PdfCraft", null],
+};
+const product = (bin) => PRODUCTS[bin]?.[0] ?? bin;
+
+function installHint(bins) {
+  const pkgs = bins.map((b) => PRODUCTS[b]?.[1]).filter(Boolean);
+  const extra = bins.includes("rembg") ? ["pipx install rembg[cli]"] : [];
+  if (bins.includes("pdfcraft")) extra.push("PdfCraft: github.com/storytold/pdfcraft");
+  const mgr = /Mac/.test(navigator.userAgent) ? "brew install" : /Win/.test(navigator.userAgent) ? "winget install" : "sudo apt install";
+  return [pkgs.length && `${mgr} ${pkgs.join(" ")}`, ...extra].filter(Boolean).join("\n");
+}
 const $ = (id) => document.getElementById(id);
 
 const state = {
@@ -140,7 +162,7 @@ function tag(tool, i) {
       h("span", { class: "fam" }, tool.family),
       h("h3", {}, tool.name),
       h("p", {}, tool.blurb),
-      off && h("span", { class: "needs" }, `needs ${tool.missing.join(", ")}`),
+      off && h("span", { class: "needs", title: installHint(tool.missing) }, `needs ${tool.missing.map(product).join(", ")}`),
     ),
   );
 }
@@ -304,7 +326,8 @@ function renderRows() {
   const missing = benchTools().flatMap((t) => t.missing);
   const run = $("run");
   run.disabled = b.running || missing.length > 0 || !b.rows.some((r) => r.state === "queued");
-  run.textContent = missing.length ? `Needs ${[...new Set(missing)].join(", ")}` : b.running ? "Running…" : "Run";
+  run.textContent = missing.length ? `Needs ${[...new Set(missing)].map(product).join(", ")}` : b.running ? "Running…" : "Run";
+  run.title = missing.length ? installHint([...new Set(missing)]) : "";
 }
 
 async function runRow(r) {
