@@ -123,7 +123,7 @@ These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):
 - *Join videos* copies streams without re-encoding, so the clips need matching codecs (same camera or same export settings).
 - *Batch rename* has no live preview and no undo, and a running job can't be cancelled yet.
 - *Change file dates* reads the date as UTC.
-- *Stamp* uses light tints, because Ghostscript 10 dropped the constant-alpha operator.
+- *Stamp* uses light tints instead of transparency, because `.setfillconstantalpha` errors out in Ghostscript 10.08.
 - *Sign* expects A4 pages, and the signature drifts a little on other page sizes.
 - *Insert clip* needs both videos to have an audio track.
 

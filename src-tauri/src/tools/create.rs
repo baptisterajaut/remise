@@ -189,7 +189,9 @@ pub static TOOLS: &[Tool] = &[
         ],
         output: Output::File { suffix: "shader", ext: fmt },
         build: |j| {
-            let src = format!("{}:s={}:r=30", j.p("src"), j.p("size"));
+            // `name=opt:opt`: the first option follows '=', the rest ':'.
+            let sep = if j.p("src").contains('=') { ':' } else { '=' };
+            let src = format!("{}{sep}s={}:r=30", j.p("src"), j.p("size"));
             let mut a = args!["-hide_banner", "-nostdin", "-y", "-f", "lavfi", "-i", src];
             if j.p("format") == "png" {
                 a.extend(args!["-frames:v", "1"]);

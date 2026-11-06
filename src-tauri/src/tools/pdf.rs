@@ -28,7 +28,7 @@ pub static TOOLS: &[Tool] = &[
                     "-dDetectDuplicateImages=true",
                     "-dNOPAUSE",
                     "-dBATCH",
-                    "-dQUIET",
+                    "-dQUIET", "-dPDFSTOPONERROR",
                     gs_out(&j.out()),
                     j.input(),
                 ],
@@ -141,7 +141,7 @@ pub static TOOLS: &[Tool] = &[
                         "-r300",
                         "-dNOPAUSE",
                         "-dBATCH",
-                        "-dQUIET",
+                        "-dQUIET", "-dPDFSTOPONERROR",
                         gs_out(&j.tmp("p-%04d.png")),
                         j.input()
                     ],
@@ -185,7 +185,7 @@ pub static TOOLS: &[Tool] = &[
                     "-dGraphicsAlphaBits=4",
                     "-dNOPAUSE",
                     "-dBATCH",
-                    "-dQUIET",
+                    "-dQUIET", "-dPDFSTOPONERROR",
                     // out_pattern already escaped the stem; gs_out would double it.
                     format!("-sOutputFile={}", j.out_pattern(&format!("-%03d.{ext}"))),
                     j.input()
@@ -222,7 +222,7 @@ pub static TOOLS: &[Tool] = &[
         build: |j| {
             vec![Step::Run(
                 "gs",
-                args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", gs_out(&j.out()), j.input()],
+                args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.out()), j.input()],
             )]
         },
     },
@@ -245,7 +245,7 @@ pub static TOOLS: &[Tool] = &[
                     "-dProcessColorModel=/DeviceGray",
                     "-dNOPAUSE",
                     "-dBATCH",
-                    "-dQUIET",
+                    "-dQUIET", "-dPDFSTOPONERROR",
                     gs_out(&j.out()),
                     j.input()
                 ],
@@ -377,7 +377,7 @@ pub static TOOLS: &[Tool] = &[
             Param::Select {
                 key: "color",
                 label: "Ink",
-                // Light tints rather than transparency: gs 10 dropped .setfillconstantalpha.
+                // Light tints rather than transparency: .setfillconstantalpha errors out in gs 10.08.
                 options: &[("0.95 0.62 0.58", "Red"), ("0.6 0.72 0.95", "Blue"), ("0.72 0.72 0.72", "Grey")],
                 default: "0.95 0.62 0.58",
             },
@@ -499,7 +499,7 @@ pub static TOOLS: &[Tool] = &[
                             "-sDEVICE=pdfwrite", "-dFIXEDMEDIA",
                             format!("-dDEVICEWIDTHPOINTS={:.0}", w - 2.0 * dx),
                             format!("-dDEVICEHEIGHTPOINTS={:.0}", h - 2.0 * dy),
-                            "-dNOPAUSE", "-dBATCH", "-dQUIET", gs_out(&j.out()),
+                            "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.out()),
                             "-c", format!("<< /PageOffset [{:.1} {:.1}] >> setpagedevice", -dx, -dy),
                             "-f", j.input()
                         ],
@@ -520,7 +520,7 @@ pub static TOOLS: &[Tool] = &[
         output: Output::File { suffix: "text", ext: |_| "md".into() },
         build: |j| {
             vec![
-                Step::Run("gs", args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", gs_out(&j.tmp("page-%04d.txt")), j.input()]),
+                Step::Run("gs", args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.tmp("page-%04d.txt")), j.input()]),
                 Step::Then(|j| {
                     let mut pages: Vec<_> = std::fs::read_dir(&j.tmp).map_err(|e| e.to_string())?.flatten().map(|e| e.path()).filter(|p| ext_of(p) == "txt").collect();
                     pages.sort();

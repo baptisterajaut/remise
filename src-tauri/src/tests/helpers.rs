@@ -83,6 +83,21 @@ fn qr_codes_are_svg() {
     assert!(tools::create::qr_svg("").is_err());
 }
 
+/// gs exits 0 even when it drops a page it couldn't draw. Every gs run that reads a user's
+/// PDF must stop on error, except Repair, whose whole job is to get past damage.
+#[test]
+fn every_ghostscript_run_fails_loudly_except_repair() {
+    for t in tools::all().filter(|t| t.bins.contains(&"gs") && t.id != "pdf-repair") {
+        let input = if t.accepts.contains(&"pdf") { "/d/a.pdf" } else { "/d/a.png" };
+        let steps = job(t.id, &[input], &[("areas", "1,1,10,10"), ("password", "x")]);
+        for step in &steps {
+            if let Step::Run("gs", a) = step {
+                assert!(a.iter().any(|x| x == "-dPDFSTOPONERROR"), "{}: {a:?}", t.id);
+            }
+        }
+    }
+}
+
 #[test]
 fn ghostscript_overlays_fail_loudly() {
     let steps = job("pdf-page-numbers", &["/d/a.pdf"], &[]);

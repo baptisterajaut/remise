@@ -189,6 +189,9 @@ fn smoke_every_tool() {
     check("create-mockup", &[&fx.png], &[("device", "phone")]);
     check("create-qr", &[], &[("text", "hello"), ("format", "png")]);
     check("create-gradient", &[], &[("kind", "radial")]);
+    for src in ["mandelbrot", "life=ratio=0.2:mold=8:life_color=#f2a33a:death_color=#3a1d0a", "cellauto=rule=110"] {
+        check("create-shader", &[], &[("src", src), ("format", "png"), ("size", "1080x1080")]);
+    }
 
     let zip = go("arc-create", &[&fx.png, &fx.pdf], &[], &home).unwrap();
     check("arc-extract", &[Path::new(&zip[0])], &[]);
