@@ -2,7 +2,7 @@
 //! Needs gs, qpdf, tesseract, ffmpeg, magick, 7z and potrace (PATH or REMISE_VENDOR).
 
 use crate::bins::{command, resolve};
-use crate::runner::{run_chain, StepReq};
+use crate::runner::{StepReq, run_chain};
 use crate::tools::{self, Family, Inputs};
 use std::collections::HashMap;
 use std::fs;
@@ -82,11 +82,45 @@ fn fixtures(test: &str) -> Fixtures {
     };
     let p = |x: &PathBuf| x.to_str().unwrap().to_string();
     let font = tools::system_font();
-    sh("magick", &["-size", "640x400", "xc:white", "-font", &font, "-fill", "black", "-pointsize", "48", "-annotate", "+40+200", "Hello Remise", &p(&fx.png)]);
+    sh(
+        "magick",
+        &[
+            "-size",
+            "640x400",
+            "xc:white",
+            "-font",
+            &font,
+            "-fill",
+            "black",
+            "-pointsize",
+            "48",
+            "-annotate",
+            "+40+200",
+            "Hello Remise",
+            &p(&fx.png),
+        ],
+    );
     sh("magick", &["-size", "320x200", "gradient:orange-navy", &p(&fx.png2)]);
     sh("magick", &[&p(&fx.png), &p(&fx.png2), &p(&fx.pdf)]);
     for out in [&fx.mp4, &fx.mp4b] {
-        sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "testsrc=s=320x240:d=3", "-f", "lavfi", "-i", "sine=d=3", "-shortest", "-pix_fmt", "yuv420p", &p(out)]);
+        sh(
+            "ffmpeg",
+            &[
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=s=320x240:d=3",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=d=3",
+                "-shortest",
+                "-pix_fmt",
+                "yuv420p",
+                &p(out),
+            ],
+        );
     }
     sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "sine=d=2", &p(&fx.wav)]);
     fs::write(&fx.srt, "1\n00:00:00,000 --> 00:00:02,000\nHello Remise\n").unwrap();
@@ -150,8 +184,15 @@ const OPTIONAL_BINS: &[&str] = &["chromium", "soffice", "waifu2x-ncnn-vulkan", "
 
 /// Optional installs, the network, and tools that move files or need a previous output.
 const NOT_IN_LOOP: &[&str] = &[
-    "pdf-studio", "img-remove-bg", "vid-transcribe", "vid-download",
-    "batch-rename", "file-sort", "file-dates", "pdf-unlock", "arc-extract",
+    "pdf-studio",
+    "img-remove-bg",
+    "vid-transcribe",
+    "vid-download",
+    "batch-rename",
+    "file-sort",
+    "file-dates",
+    "pdf-unlock",
+    "arc-extract",
 ];
 
 #[test]
@@ -264,7 +305,8 @@ fn smoke_pandoc_keeps_own_images_only() {
     let evil = fx.dir.join("sub").join("evil.md");
     fs::create_dir_all(evil.parent().unwrap()).unwrap();
     fs::write(evil.with_file_name("id_rsa"), "PRIVATE KEY").unwrap();
-    let body = format!("---\ncss: {secret}\n---\n![a]({secret}) ![b](../b.png) ![c](file://{secret}) ![d](id_rsa)\n\n<img src=\"{secret}\">\n");
+    let body =
+        format!("---\ncss: {secret}\n---\n![a]({secret}) ![b](../b.png) ![c](file://{secret}) ![d](id_rsa)\n\n<img src=\"{secret}\">\n");
     fs::write(&evil, body).unwrap();
     let html = |input: &Path| {
         let out = go("doc-convert", &[input], &[("format", "html")], &fx.dir).unwrap();

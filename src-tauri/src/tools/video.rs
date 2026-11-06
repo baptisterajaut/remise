@@ -81,11 +81,7 @@ pub static TOOLS: &[Tool] = &[
         ],
         output: Output::File { suffix: "anim", ext: |_| "gif".into() },
         build: |j| {
-            let vf = format!(
-                "fps={},scale={}:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
-                j.p("fps"),
-                j.p("width")
-            );
+            let vf = format!("fps={},scale={}:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse", j.p("fps"), j.p("width"));
             vec![ffmpeg(j, args!["-vf", vf, "-loop", "0"])]
         },
     },
@@ -103,18 +99,7 @@ pub static TOOLS: &[Tool] = &[
             // Input-side seek + re-encode: fast and frame accurate.
             vec![Step::Run(
                 "ffmpeg",
-                args![
-                    "-hide_banner",
-                    "-nostdin",
-                    "-y",
-                    "-ss",
-                    j.p("start"),
-                    "-to",
-                    j.p("end"),
-                    "-i",
-                    j.input(),
-                    j.out()
-                ],
+                args!["-hide_banner", "-nostdin", "-y", "-ss", j.p("start"), "-to", j.p("end"), "-i", j.input(), j.out()],
             )]
         },
     },
@@ -195,12 +180,7 @@ pub static TOOLS: &[Tool] = &[
         params: &[Param::Select {
             key: "vf",
             label: "Action",
-            options: &[
-                ("transpose=1", "90° right"),
-                ("transpose=2", "90° left"),
-                ("transpose=1,transpose=1", "180°"),
-                ("hflip", "Mirror"),
-            ],
+            options: &[("transpose=1", "90° right"), ("transpose=2", "90° left"), ("transpose=1,transpose=1", "180°"), ("hflip", "Mirror")],
             default: "transpose=1",
         }],
         output: Output::File { suffix: "rotated", ext: same },
@@ -219,29 +199,12 @@ pub static TOOLS: &[Tool] = &[
         // CBA: concat demuxer + stream copy, needs matching codecs; concat filter with re-encode if mixed sources matter
         build: |j| {
             let list = j.tmp.join("list.txt");
-            let body: String = j
-                .inputs
-                .iter()
-                .map(|p| format!("file '{}'\n", s(p).replace('\'', "'\\''")))
-                .collect();
+            let body: String = j.inputs.iter().map(|p| format!("file '{}'\n", s(p).replace('\'', "'\\''"))).collect();
             vec![
                 Step::Write(list.clone(), body),
                 Step::Run(
                     "ffmpeg",
-                    args![
-                        "-hide_banner",
-                        "-nostdin",
-                        "-y",
-                        "-f",
-                        "concat",
-                        "-safe",
-                        "0",
-                        "-i",
-                        s(&list),
-                        "-c",
-                        "copy",
-                        j.out()
-                    ],
+                    args!["-hide_banner", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", s(&list), "-c", "copy", j.out()],
                 ),
             ]
         },
@@ -329,7 +292,12 @@ pub static TOOLS: &[Tool] = &[
             Param::Select {
                 key: "pos",
                 label: "Corner",
-                options: &[("W-w-24:H-h-24", "Bottom right"), ("24:H-h-24", "Bottom left"), ("W-w-24:24", "Top right"), ("24:24", "Top left")],
+                options: &[
+                    ("W-w-24:H-h-24", "Bottom right"),
+                    ("24:H-h-24", "Bottom left"),
+                    ("W-w-24:24", "Top right"),
+                    ("24:24", "Top left"),
+                ],
                 default: "W-w-24:H-h-24",
             },
             Param::Select {
@@ -382,8 +350,22 @@ pub static TOOLS: &[Tool] = &[
                     j.tmp.clone(),
                     "ffmpeg",
                     args![
-                        "-hide_banner", "-nostdin", "-y", "-i", video, "-vf", vf,
-                        "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "copy", j.out()
+                        "-hide_banner",
+                        "-nostdin",
+                        "-y",
+                        "-i",
+                        video,
+                        "-vf",
+                        vf,
+                        "-c:v",
+                        "libx264",
+                        "-crf",
+                        "20",
+                        "-pix_fmt",
+                        "yuv420p",
+                        "-c:a",
+                        "copy",
+                        j.out()
                     ],
                 ),
             ]
@@ -446,8 +428,28 @@ pub static TOOLS: &[Tool] = &[
             vec![Step::Run(
                 "ffmpeg",
                 args![
-                    "-hide_banner", "-nostdin", "-y", "-i", s(main), "-i", s(clip), "-filter_complex", fc,
-                    "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", j.out()
+                    "-hide_banner",
+                    "-nostdin",
+                    "-y",
+                    "-i",
+                    s(main),
+                    "-i",
+                    s(clip),
+                    "-filter_complex",
+                    fc,
+                    "-map",
+                    "[v]",
+                    "-map",
+                    "[a]",
+                    "-c:v",
+                    "libx264",
+                    "-crf",
+                    "20",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    j.out()
                 ],
             )]
         },
@@ -510,10 +512,7 @@ pub static TOOLS: &[Tool] = &[
             vec![
                 Step::Then(fresh_ytdlp),
                 // QuickJS (bundled) runs YouTube's player code; deno/node are used instead if present.
-                Step::Run(
-                    "yt-dlp",
-                    args!["--no-playlist", "--js-runtimes", "quickjs", "-f", j.p("quality"), "-o", template, "--", url],
-                ),
+                Step::Run("yt-dlp", args!["--no-playlist", "--js-runtimes", "quickjs", "-f", j.p("quality"), "-o", template, "--", url]),
             ]
         },
     },
@@ -543,8 +542,21 @@ pub fn segment(j: &Job) -> Step {
     Step::Run(
         "ffmpeg",
         args![
-            "-hide_banner", "-nostdin", "-y", "-i", j.input(), "-map", "0", "-c", "copy",
-            "-f", "segment", "-segment_time", j.p("every"), "-reset_timestamps", "1",
+            "-hide_banner",
+            "-nostdin",
+            "-y",
+            "-i",
+            j.input(),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            "-f",
+            "segment",
+            "-segment_time",
+            j.p("every"),
+            "-reset_timestamps",
+            "1",
             j.out_pattern(&format!("-%03d.{}", j.in_ext()))
         ],
     )

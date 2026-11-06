@@ -1,0 +1,3 @@
+# Close to the hand layout the code started with: wide lines, short constructs kept on one.
+max_width = 140
+use_small_heuristics = "Max"

@@ -11,12 +11,7 @@ pub static TOOLS: &[Tool] = &[
         bins: &["7z"],
         accepts: &[],
         inputs: Inputs::Many,
-        params: &[Param::Select {
-            key: "format",
-            label: "Format",
-            options: &[("zip", "ZIP"), ("7z", "7z")],
-            default: "zip",
-        }],
+        params: &[Param::Select { key: "format", label: "Format", options: &[("zip", "ZIP"), ("7z", "7z")], default: "zip" }],
         output: Output::File { suffix: "archive", ext: fmt },
         build: |j| {
             let mut a = args!["a", format!("-t{}", j.p("format")), "-y", j.out()];

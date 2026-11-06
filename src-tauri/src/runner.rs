@@ -3,7 +3,7 @@
 //! under a name that never overwrites anything.
 
 use crate::bins::{command, resolve, which};
-use crate::tools::{self, find, stem_of, with_defaults, Inputs, Job, Output, Step, Tool};
+use crate::tools::{self, Inputs, Job, Output, Step, Tool, find, stem_of, with_defaults};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -116,13 +116,8 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
     if bin == "ffmpeg" {
         cmd.args(["-progress", "pipe:1", "-nostats"]);
     }
-    let mut child = cmd
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("{bin}: {e}"))?;
+    let mut child =
+        cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("{bin}: {e}"))?;
     let duration = Arc::new(Mutex::new(None));
     let stderr = drain_stderr(child.stderr.take().unwrap(), duration.clone());
     let stdout = drain_stdout(child.stdout.take().unwrap(), |secs| {
@@ -315,15 +310,7 @@ pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<Stri
         Some(first) => (first.parent().map(Path::to_path_buf).unwrap_or_default(), stem_of(first)),
         None => (fallback.to_path_buf(), "remise".to_string()),
     };
-    let mut chain = Chain {
-        emit,
-        job_id,
-        home,
-        stem,
-        scratch: scratch_dir(job_id)?,
-        steps: steps.len(),
-        suffixes: Vec::new(),
-    };
+    let mut chain = Chain { emit, job_id, home, stem, scratch: scratch_dir(job_id)?, steps: steps.len(), suffixes: Vec::new() };
     let result = steps.into_iter().enumerate().try_for_each(|(i, req)| {
         current = chain.step(i, req, std::mem::take(&mut current))?;
         Ok::<(), String>(())

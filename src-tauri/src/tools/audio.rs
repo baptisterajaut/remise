@@ -14,14 +14,7 @@ pub static TOOLS: &[Tool] = &[
         params: &[Param::Select {
             key: "format",
             label: "To",
-            options: &[
-                ("mp3", "MP3"),
-                ("m4a", "M4A"),
-                ("wav", "WAV"),
-                ("flac", "FLAC"),
-                ("ogg", "OGG"),
-                ("opus", "Opus"),
-            ],
+            options: &[("mp3", "MP3"), ("m4a", "M4A"), ("wav", "WAV"), ("flac", "FLAC"), ("ogg", "OGG"), ("opus", "Opus")],
             default: "mp3",
         }],
         output: Output::File { suffix: "converted", ext: fmt },
@@ -94,12 +87,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "waveform", ext: |_| "png".into() },
-        build: |j| {
-            vec![ffmpeg(
-                j,
-                args!["-filter_complex", "showwavespic=s=1600x400:colors=#f2a33a", "-frames:v", "1"],
-            )]
-        },
+        build: |j| vec![ffmpeg(j, args!["-filter_complex", "showwavespic=s=1600x400:colors=#f2a33a", "-frames:v", "1"])],
     },
     Tool {
         id: "aud-trim",

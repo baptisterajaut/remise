@@ -28,7 +28,8 @@ pub static TOOLS: &[Tool] = &[
                     "-dDetectDuplicateImages=true",
                     "-dNOPAUSE",
                     "-dBATCH",
-                    "-dQUIET", "-dPDFSTOPONERROR",
+                    "-dQUIET",
+                    "-dPDFSTOPONERROR",
                     gs_out(&j.out()),
                     j.input(),
                 ],
@@ -121,12 +122,7 @@ pub static TOOLS: &[Tool] = &[
             Param::Text { key: "pages", label: "Pages", default: "1-z", placeholder: "1-z = all" },
         ],
         output: Output::File { suffix: "rotated", ext: |_| "pdf".into() },
-        build: |j| {
-            vec![Step::Run(
-                "qpdf",
-                args![j.input(), j.out(), format!("--rotate={}:{}", j.p("angle"), j.p("pages"))],
-            )]
-        },
+        build: |j| vec![Step::Run("qpdf", args![j.input(), j.out(), format!("--rotate={}:{}", j.p("angle"), j.p("pages"))])],
     },
     Tool {
         id: "pdf-ocr",
@@ -153,7 +149,8 @@ pub static TOOLS: &[Tool] = &[
                         "-r300",
                         "-dNOPAUSE",
                         "-dBATCH",
-                        "-dQUIET", "-dPDFSTOPONERROR",
+                        "-dQUIET",
+                        "-dPDFSTOPONERROR",
                         gs_out(&j.tmp("p-%04d.png")),
                         j.input()
                     ],
@@ -172,12 +169,7 @@ pub static TOOLS: &[Tool] = &[
         accepts: PDF,
         inputs: Inputs::One,
         params: &[
-            Param::Select {
-                key: "format",
-                label: "Format",
-                options: &[("png16m", "PNG"), ("jpeg", "JPG")],
-                default: "png16m",
-            },
+            Param::Select { key: "format", label: "Format", options: &[("png16m", "PNG"), ("jpeg", "JPG")], default: "png16m" },
             Param::Select {
                 key: "dpi",
                 label: "Resolution",
@@ -197,7 +189,8 @@ pub static TOOLS: &[Tool] = &[
                     "-dGraphicsAlphaBits=4",
                     "-dNOPAUSE",
                     "-dBATCH",
-                    "-dQUIET", "-dPDFSTOPONERROR",
+                    "-dQUIET",
+                    "-dPDFSTOPONERROR",
                     // out_pattern already escaped the stem; gs_out would double it.
                     format!("-sOutputFile={}", j.out_pattern(&format!("-%03d.{ext}"))),
                     j.input()
@@ -257,7 +250,8 @@ pub static TOOLS: &[Tool] = &[
                     "-dProcessColorModel=/DeviceGray",
                     "-dNOPAUSE",
                     "-dBATCH",
-                    "-dQUIET", "-dPDFSTOPONERROR",
+                    "-dQUIET",
+                    "-dPDFSTOPONERROR",
                     gs_out(&j.out()),
                     j.input()
                 ],
@@ -294,12 +288,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[Param::Text { key: "password", label: "Password", default: "", placeholder: "current password" }],
         output: Output::File { suffix: "unlocked", ext: |_| "pdf".into() },
-        build: |j| {
-            vec![Step::Run(
-                "qpdf",
-                args![format!("--password={}", j.p("password")), "--decrypt", j.input(), j.out()],
-            )]
-        },
+        build: |j| vec![Step::Run("qpdf", args![format!("--password={}", j.p("password")), "--decrypt", j.input(), j.out()])],
     },
     Tool {
         id: "pdf-web",
@@ -429,7 +418,9 @@ pub static TOOLS: &[Tool] = &[
             Ok(areas) => {
                 let rects: String = areas
                     .iter()
-                    .map(|[x, y, w, h]| format!("W {x} mul 100 div H {} mul 100 div W {w} mul 100 div H {h} mul 100 div rectfill ", 100.0 - y - h))
+                    .map(|[x, y, w, h]| {
+                        format!("W {x} mul 100 div H {} mul 100 div W {w} mul 100 div H {h} mul 100 div rectfill ", 100.0 - y - h)
+                    })
                     .collect();
                 // Rasterising (pdfimage24) is what makes it a redaction and not a black box over live text.
                 vec![gs_overlay(j, "pdfimage24", &["-r150"], &format!("0 setgray {rects}"))]
@@ -471,9 +462,24 @@ pub static TOOLS: &[Tool] = &[
                 Step::Run(
                     "magick",
                     args![
-                        "-size", "1240x1754", "xc:none", "(", sig, "-resize", format!("{}x", j.p("width")), ")",
-                        "-gravity", j.p("corner"), "-geometry", "+90+110", "-composite",
-                        "-units", "PixelsPerInch", "-density", "150", layer.clone()
+                        "-size",
+                        "1240x1754",
+                        "xc:none",
+                        "(",
+                        sig,
+                        "-resize",
+                        format!("{}x", j.p("width")),
+                        ")",
+                        "-gravity",
+                        j.p("corner"),
+                        "-geometry",
+                        "+90+110",
+                        "-composite",
+                        "-units",
+                        "PixelsPerInch",
+                        "-density",
+                        "150",
+                        layer.clone()
                     ],
                 ),
                 Step::Run("qpdf", args![pdf, "--overlay", layer, format!("--to={}", j.p("pages")), "--from=", "--repeat=1", "--", j.out()]),
@@ -512,12 +518,19 @@ pub static TOOLS: &[Tool] = &[
                     Ok(vec![Step::Run(
                         "gs",
                         args![
-                            "-sDEVICE=pdfwrite", "-dFIXEDMEDIA",
+                            "-sDEVICE=pdfwrite",
+                            "-dFIXEDMEDIA",
                             format!("-dDEVICEWIDTHPOINTS={:.0}", w - 2.0 * dx),
                             format!("-dDEVICEHEIGHTPOINTS={:.0}", h - 2.0 * dy),
-                            "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.out()),
-                            "-c", format!("<< /PageOffset [{:.1} {:.1}] >> setpagedevice", -dx, -dy),
-                            "-f", j.input()
+                            "-dNOPAUSE",
+                            "-dBATCH",
+                            "-dQUIET",
+                            "-dPDFSTOPONERROR",
+                            gs_out(&j.out()),
+                            "-c",
+                            format!("<< /PageOffset [{:.1} {:.1}] >> setpagedevice", -dx, -dy),
+                            "-f",
+                            j.input()
                         ],
                     )])
                 }),
@@ -536,7 +549,18 @@ pub static TOOLS: &[Tool] = &[
         output: Output::File { suffix: "text", ext: |_| "md".into() },
         build: |j| {
             vec![
-                Step::Run("gs", args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.tmp("page-%04d.txt")), j.input()]),
+                Step::Run(
+                    "gs",
+                    args![
+                        "-sDEVICE=txtwrite",
+                        "-dNOPAUSE",
+                        "-dBATCH",
+                        "-dQUIET",
+                        "-dPDFSTOPONERROR",
+                        gs_out(&j.tmp("page-%04d.txt")),
+                        j.input()
+                    ],
+                ),
                 Step::Then(|j| Ok(vec![Step::Write(j.out.clone(), to_markdown(&j.stem(), &text_pages(j)?))])),
             ]
         },
@@ -604,9 +628,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "flat", ext: |_| "pdf".into() },
-        build: |j| {
-            vec![Step::Run("qpdf", args!["--generate-appearances", "--flatten-annotations=all", j.input(), j.out()])]
-        },
+        build: |j| vec![Step::Run("qpdf", args!["--generate-appearances", "--flatten-annotations=all", j.input(), j.out()])],
     },
     Tool {
         id: "pdf-repair",
@@ -632,7 +654,8 @@ pub static TOOLS: &[Tool] = &[
         params: &[],
         output: Output::File { suffix: "office", ext: |_| "pdf".into() },
         build: |j| {
-            let profile = format!("-env:UserInstallation=file:///{}", j.tmp("lo").replace('\\', "/").replace(' ', "%20").trim_start_matches('/'));
+            let profile =
+                format!("-env:UserInstallation=file:///{}", j.tmp("lo").replace('\\', "/").replace(' ', "%20").trim_start_matches('/'));
             vec![
                 Step::Run("soffice", args![profile, "--headless", "--convert-to", "pdf", "--outdir", s(&j.tmp), j.input()]),
                 Step::Rename(j.tmp.join(format!("{}.pdf", j.stem())), j.out.clone()),
@@ -643,12 +666,8 @@ pub static TOOLS: &[Tool] = &[
 
 /// The `page-NNNN.txt` files gs txtwrite left in tmp, in page order.
 pub fn text_pages(j: &Job) -> Result<Vec<String>, String> {
-    let mut pages: Vec<_> = std::fs::read_dir(&j.tmp)
-        .map_err(|e| e.to_string())?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| ext_of(p) == "txt")
-        .collect();
+    let mut pages: Vec<_> =
+        std::fs::read_dir(&j.tmp).map_err(|e| e.to_string())?.flatten().map(|e| e.path()).filter(|p| ext_of(p) == "txt").collect();
     pages.sort();
     pages.iter().map(|p| std::fs::read_to_string(p).map_err(|e| e.to_string())).collect()
 }

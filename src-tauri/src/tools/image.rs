@@ -14,14 +14,7 @@ pub static TOOLS: &[Tool] = &[
         params: &[Param::Select {
             key: "format",
             label: "To",
-            options: &[
-                ("webp", "WebP"),
-                ("png", "PNG"),
-                ("jpg", "JPG"),
-                ("avif", "AVIF"),
-                ("tiff", "TIFF"),
-                ("gif", "GIF"),
-            ],
+            options: &[("webp", "WebP"), ("png", "PNG"), ("jpg", "JPG"), ("avif", "AVIF"), ("tiff", "TIFF"), ("gif", "GIF")],
             default: "webp",
         }],
         output: Output::File { suffix: "converted", ext: fmt },
@@ -42,12 +35,7 @@ pub static TOOLS: &[Tool] = &[
             default: "72",
         }],
         output: Output::File { suffix: "compressed", ext: same },
-        build: |j| {
-            vec![magick(
-                j,
-                args!["-auto-orient", "-strip", "-quality", j.p("quality"), "-define", "png:compression-level=9"],
-            )]
-        },
+        build: |j| vec![magick(j, args!["-auto-orient", "-strip", "-quality", j.p("quality"), "-define", "png:compression-level=9"])],
     },
     Tool {
         id: "img-resize",
@@ -217,20 +205,10 @@ pub static TOOLS: &[Tool] = &[
             Param::Select {
                 key: "pos",
                 label: "Corner",
-                options: &[
-                    ("southeast", "Bottom right"),
-                    ("southwest", "Bottom left"),
-                    ("northeast", "Top right"),
-                    ("center", "Center"),
-                ],
+                options: &[("southeast", "Bottom right"), ("southwest", "Bottom left"), ("northeast", "Top right"), ("center", "Center")],
                 default: "southeast",
             },
-            Param::Select {
-                key: "size",
-                label: "Size",
-                options: &[("28", "Small"), ("56", "Medium"), ("112", "Large")],
-                default: "56",
-            },
+            Param::Select { key: "size", label: "Size", options: &[("28", "Small"), ("56", "Medium"), ("112", "Large")], default: "56" },
         ],
         output: Output::File { suffix: "watermarked", ext: same },
         build: |j| {
@@ -287,9 +265,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "icon", ext: |_| "ico".into() },
-        build: |j| {
-            vec![magick(j, args!["-background", "none", "-define", "icon:auto-resize=256,128,64,48,32,16"])]
-        },
+        build: |j| vec![magick(j, args!["-background", "none", "-define", "icon:auto-resize=256,128,64,48,32,16"])],
     },
     Tool {
         id: "img-palette",
@@ -299,19 +275,9 @@ pub static TOOLS: &[Tool] = &[
         bins: &["magick"],
         accepts: IMG,
         inputs: Inputs::One,
-        params: &[Param::Select {
-            key: "n",
-            label: "Colours",
-            options: &[("5", "5"), ("8", "8"), ("12", "12")],
-            default: "8",
-        }],
+        params: &[Param::Select { key: "n", label: "Colours", options: &[("5", "5"), ("8", "8"), ("12", "12")], default: "8" }],
         output: Output::File { suffix: "palette", ext: |_| "png".into() },
-        build: |j| {
-            vec![magick(
-                j,
-                args!["-resize", "256x256", "-colors", j.p("n"), "-unique-colors", "-scale", "8000%"],
-            )]
-        },
+        build: |j| vec![magick(j, args!["-resize", "256x256", "-colors", j.p("n"), "-unique-colors", "-scale", "8000%"])],
     },
     Tool {
         id: "img-contact-sheet",
@@ -321,12 +287,7 @@ pub static TOOLS: &[Tool] = &[
         bins: &["magick"],
         accepts: IMG,
         inputs: Inputs::Many,
-        params: &[Param::Select {
-            key: "cols",
-            label: "Columns",
-            options: &[("3", "3"), ("4", "4"), ("6", "6")],
-            default: "4",
-        }],
+        params: &[Param::Select { key: "cols", label: "Columns", options: &[("3", "3"), ("4", "4"), ("6", "6")], default: "4" }],
         output: Output::File { suffix: "sheet", ext: |_| "jpg".into() },
         build: |j| {
             let mut a = args!["montage"];
@@ -376,12 +337,7 @@ pub static TOOLS: &[Tool] = &[
                 default: "35,35,30,30",
                 placeholder: "10,20,30,10; 60,70,20,15",
             },
-            Param::Select {
-                key: "mode",
-                label: "How",
-                options: &[("black", "Black box"), ("pixelate", "Pixelate")],
-                default: "black",
-            },
+            Param::Select { key: "mode", label: "How", options: &[("black", "Black box"), ("pixelate", "Pixelate")], default: "black" },
         ],
         output: Output::File { suffix: "redacted", ext: same },
         // Absolute pixel coordinates from the measured size: ImageMagick 6 has no %[fx:] in -draw.
@@ -402,7 +358,10 @@ pub static TOOLS: &[Tool] = &[
         output: Output::None,
         build: |j| {
             vec![
-                Step::Run("magick", args![j.input(), "-auto-orient", "-strip", "-resize", "1600x1600>", "-quality", "80", j.tmp("seo.webp")]),
+                Step::Run(
+                    "magick",
+                    args![j.input(), "-auto-orient", "-strip", "-resize", "1600x1600>", "-quality", "80", j.tmp("seo.webp")],
+                ),
                 Step::Then(|j| {
                     let dir = j.inputs[0].parent().unwrap_or(&j.tmp).to_path_buf();
                     let slug = slugify(&j.stem());
@@ -453,15 +412,15 @@ pub static TOOLS: &[Tool] = &[
             Param::Select {
                 key: "corner",
                 label: "Corner",
-                options: &[("southeast", "Bottom right"), ("southwest", "Bottom left"), ("northeast", "Top right"), ("northwest", "Top left")],
+                options: &[
+                    ("southeast", "Bottom right"),
+                    ("southwest", "Bottom left"),
+                    ("northeast", "Top right"),
+                    ("northwest", "Top left"),
+                ],
                 default: "southeast",
             },
-            Param::Select {
-                key: "size",
-                label: "Logo width",
-                options: &[("10", "10 %"), ("15", "15 %"), ("25", "25 %")],
-                default: "15",
-            },
+            Param::Select { key: "size", label: "Logo width", options: &[("10", "10 %"), ("15", "15 %"), ("25", "25 %")], default: "15" },
         ],
         output: Output::Dir("attached"),
         build: |j| {
@@ -497,7 +456,9 @@ pub static TOOLS: &[Tool] = &[
         build: |j| {
             vec![
                 Step::Try(Box::new(Step::Run("waifu2x-ncnn-vulkan", waifu2x_args(j, None)))),
-                Step::Then(|j| Ok(if j.out.is_file() { vec![] } else { vec![Step::Run("waifu2x-ncnn-vulkan", waifu2x_args(j, Some("-1")))] })),
+                Step::Then(|j| {
+                    Ok(if j.out.is_file() { vec![] } else { vec![Step::Run("waifu2x-ncnn-vulkan", waifu2x_args(j, Some("-1")))] })
+                }),
             ]
         },
     },
@@ -517,10 +478,7 @@ pub static TOOLS: &[Tool] = &[
 ];
 
 pub fn waifu2x_args(j: &Job, gpu: Option<&str>) -> Vec<String> {
-    let mut a = args![
-        "-i", j.input(), "-o", j.out(), "-s", j.p("scale"), "-n", "-1",
-        "-m", "{bindir}/models-upconv_7_photo", "-f", "png"
-    ];
+    let mut a = args!["-i", j.input(), "-o", j.out(), "-s", j.p("scale"), "-n", "-1", "-m", "{bindir}/models-upconv_7_photo", "-f", "png"];
     if let Some(g) = gpu {
         a.extend(args!["-g", g]);
     }
@@ -538,8 +496,19 @@ fn redact_plan(j: &Job) -> Result<Vec<Step>, String> {
             a.extend(args!["-draw", format!("rectangle {px},{py} {},{}", px + pw - 1.0, py + ph - 1.0)]);
         } else {
             a.extend(args![
-                "(", "+clone", "-crop", format!("{pw}x{ph}+{px}+{py}"), "+repage", "-scale", "6%", "-scale", format!("{pw}x{ph}!"), ")",
-                "-geometry", format!("+{px}+{py}"), "-composite"
+                "(",
+                "+clone",
+                "-crop",
+                format!("{pw}x{ph}+{px}+{py}"),
+                "+repage",
+                "-scale",
+                "6%",
+                "-scale",
+                format!("{pw}x{ph}!"),
+                ")",
+                "-geometry",
+                format!("+{px}+{py}"),
+                "-composite"
             ]);
         }
     }
@@ -554,9 +523,25 @@ fn diff_plan(j: &Job) -> Result<Vec<Step>, String> {
         "magick",
         args![
             // sRGB, no alpha: a grey+alpha first image would otherwise colour the whole result.
-            s(&j.inputs[0]), "-alpha", "off", "-colorspace", "sRGB",
-            "(", s(&j.inputs[1]), "-alpha", "off", "-colorspace", "sRGB", "-resize", format!("{w}x{h}!"), ")",
-            "-compose", "difference", "-composite", "-auto-level", j.out()
+            s(&j.inputs[0]),
+            "-alpha",
+            "off",
+            "-colorspace",
+            "sRGB",
+            "(",
+            s(&j.inputs[1]),
+            "-alpha",
+            "off",
+            "-colorspace",
+            "sRGB",
+            "-resize",
+            format!("{w}x{h}!"),
+            ")",
+            "-compose",
+            "difference",
+            "-composite",
+            "-auto-level",
+            j.out()
         ],
     )])
 }
@@ -575,8 +560,18 @@ fn attach_plan(j: &Job) -> Result<Vec<Step>, String> {
             Ok(Step::Run(
                 "magick",
                 args![
-                    s(p), "-auto-orient", "(", logo.clone(), "-resize", format!("{logo_w}x"), ")",
-                    "-gravity", j.p("corner"), "-geometry", format!("+{margin}+{margin}"), "-composite",
+                    s(p),
+                    "-auto-orient",
+                    "(",
+                    logo.clone(),
+                    "-resize",
+                    format!("{logo_w}x"),
+                    ")",
+                    "-gravity",
+                    j.p("corner"),
+                    "-geometry",
+                    format!("+{margin}+{margin}"),
+                    "-composite",
                     s(&j.out.join(name))
                 ],
             ))

@@ -21,18 +21,8 @@ pub enum Family {
 #[derive(Serialize, Debug)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Param {
-    Select {
-        key: &'static str,
-        label: &'static str,
-        options: &'static [(&'static str, &'static str)],
-        default: &'static str,
-    },
-    Text {
-        key: &'static str,
-        label: &'static str,
-        default: &'static str,
-        placeholder: &'static str,
-    },
+    Select { key: &'static str, label: &'static str, options: &'static [(&'static str, &'static str)], default: &'static str },
+    Text { key: &'static str, label: &'static str, default: &'static str, placeholder: &'static str },
 }
 
 impl Param {
@@ -88,13 +78,21 @@ pub enum Step {
     /// Same, from inside `dir` (tools that write relative paths, like Pandoc's extracted media).
     RunIn(PathBuf, &'static str, Vec<String>),
     /// Write the sorted list of `dir/*.ext` paths, one per line, to `out`.
-    ListDir { dir: PathBuf, ext: &'static str, out: PathBuf },
+    ListDir {
+        dir: PathBuf,
+        ext: &'static str,
+        out: PathBuf,
+    },
     Write(PathBuf, String),
     Rename(PathBuf, PathBuf),
     /// Start another app and don't wait for it.
     Launch(&'static str, Vec<String>),
     /// Run and save stdout to a file, for a later `Then` to read.
-    Capture { bin: &'static str, args: Vec<String>, into: PathBuf },
+    Capture {
+        bin: &'static str,
+        args: Vec<String>,
+        into: PathBuf,
+    },
     /// Decide the next steps from what earlier steps left in `tmp` (page sizes, file lists…).
     Then(fn(&Job) -> Result<Vec<Step>, String>),
     /// Set a file's modification time.
@@ -205,9 +203,7 @@ const PDF: &[&str] = &["pdf"];
 const IMG: &[&str] = &["png", "jpg", "jpeg", "webp", "avif", "tif", "tiff", "bmp", "gif", "heic"];
 const VID: &[&str] = &["mp4", "mov", "mkv", "webm", "avi", "m4v"];
 const AUD: &[&str] = &["mp3", "wav", "flac", "m4a", "aac", "ogg", "opus"];
-const AV: &[&str] = &[
-    "mp4", "mov", "mkv", "webm", "avi", "m4v", "mp3", "wav", "flac", "m4a", "aac", "ogg", "opus",
-];
+const AV: &[&str] = &["mp4", "mov", "mkv", "webm", "avi", "m4v", "mp3", "wav", "flac", "m4a", "aac", "ogg", "opus"];
 const PDF_IMG: &[&str] = &["pdf", "png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp"];
 const ARCHIVES: &[&str] = &["zip", "7z", "rar", "tar", "gz", "tgz", "xz", "bz2", "zst", "iso"];
 

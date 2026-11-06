@@ -1,6 +1,6 @@
 //! The pure helpers behind the newer tools.
 
-use crate::tools::{self, parse_areas, parse_date, ps_str, pdf, Job, Step};
+use crate::tools::{self, Job, Step, parse_areas, parse_date, pdf, ps_str};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -146,7 +146,9 @@ fn pandoc_typesets_pdf_with_typst_and_keeps_markdown_images_relative() {
 
 #[test]
 fn every_pandoc_run_is_sandboxed_with_the_image_filter() {
-    for (id, input) in [("doc-convert", "/d/page.html"), ("doc-md-docx", "/d/notes.md"), ("doc-md-pdf", "/d/notes.md"), ("pdf-ebook", "/d/book.epub")] {
+    for (id, input) in
+        [("doc-convert", "/d/page.html"), ("doc-md-docx", "/d/notes.md"), ("doc-md-pdf", "/d/notes.md"), ("pdf-ebook", "/d/book.epub")]
+    {
         let steps = job(id, &[input], &[]);
         let [Step::Write(filter, lua), Step::Run("pandoc", a)] = &steps[..] else { panic!("{id}: {steps:?}") };
         assert!(lua.contains("mediabag"), "{id}");

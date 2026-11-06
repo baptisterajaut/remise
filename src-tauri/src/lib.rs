@@ -61,12 +61,7 @@ fn list_tools() -> Vec<ToolInfo> {
                 Output::None => "none",
             },
             produces: produces(t),
-            missing: t
-                .bins
-                .iter()
-                .copied()
-                .filter(|b| !*found.entry(b).or_insert_with(|| bins::available(b)))
-                .collect(),
+            missing: t.bins.iter().copied().filter(|b| !*found.entry(b).or_insert_with(|| bins::available(b))).collect(),
         })
         .collect()
 }

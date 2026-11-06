@@ -5,18 +5,54 @@ use super::*;
 /// ImageMagick's rounded-corners recipe (alpha mask with four quarter circles).
 fn rounded(r: u32) -> Vec<String> {
     args![
-        "-alpha", "set", "(", "+clone", "-alpha", "extract",
-        "-draw", format!("fill black polygon 0,0 0,{r} {r},0 fill white circle {r},{r} {r},0"),
-        "(", "+clone", "-flip", ")", "-compose", "Multiply", "-composite",
-        "(", "+clone", "-flop", ")", "-compose", "Multiply", "-composite", ")",
-        "-alpha", "off", "-compose", "CopyOpacity", "-composite", "-compose", "over"
+        "-alpha",
+        "set",
+        "(",
+        "+clone",
+        "-alpha",
+        "extract",
+        "-draw",
+        format!("fill black polygon 0,0 0,{r} {r},0 fill white circle {r},{r} {r},0"),
+        "(",
+        "+clone",
+        "-flip",
+        ")",
+        "-compose",
+        "Multiply",
+        "-composite",
+        "(",
+        "+clone",
+        "-flop",
+        ")",
+        "-compose",
+        "Multiply",
+        "-composite",
+        ")",
+        "-alpha",
+        "off",
+        "-compose",
+        "CopyOpacity",
+        "-composite",
+        "-compose",
+        "over"
     ]
 }
 
 fn shadow(opacity: u32) -> Vec<String> {
     args![
-        "(", "+clone", "-background", "black", "-shadow", format!("{opacity}x22+0+18"), ")",
-        "+swap", "-background", "none", "-layers", "merge", "+repage"
+        "(",
+        "+clone",
+        "-background",
+        "black",
+        "-shadow",
+        format!("{opacity}x22+0+18"),
+        ")",
+        "+swap",
+        "-background",
+        "none",
+        "-layers",
+        "merge",
+        "+repage"
     ]
 }
 
@@ -33,10 +69,24 @@ fn mockup(j: &Job) -> Vec<String> {
         }
         _ => {
             a.extend(args![
-                "-background", "#e9e6df", "-gravity", "north", "-splice", "0x46",
-                "-fill", "#ff5f57", "-draw", "circle 24,23 30,23",
-                "-fill", "#febc2e", "-draw", "circle 46,23 52,23",
-                "-fill", "#28c840", "-draw", "circle 68,23 74,23"
+                "-background",
+                "#e9e6df",
+                "-gravity",
+                "north",
+                "-splice",
+                "0x46",
+                "-fill",
+                "#ff5f57",
+                "-draw",
+                "circle 24,23 30,23",
+                "-fill",
+                "#febc2e",
+                "-draw",
+                "circle 46,23 52,23",
+                "-fill",
+                "#28c840",
+                "-draw",
+                "circle 68,23 74,23"
             ]);
             a.extend(rounded(14));
         }
@@ -170,12 +220,7 @@ pub static TOOLS: &[Tool] = &[
                 default: "gradients=n=4:speed=0.015",
             },
             Param::Select { key: "size", label: "Size", options: SIZES, default: "1920x1080" },
-            Param::Select {
-                key: "format",
-                label: "As",
-                options: &[("mp4", "6 s loop (MP4)"), ("png", "Still (PNG)")],
-                default: "mp4",
-            },
+            Param::Select { key: "format", label: "As", options: &[("mp4", "6 s loop (MP4)"), ("png", "Still (PNG)")], default: "mp4" },
         ],
         output: Output::File { suffix: "shader", ext: fmt },
         build: |j| {
@@ -208,16 +253,46 @@ pub static TOOLS: &[Tool] = &[
             vec![Step::Run(
                 "magick",
                 args![
-                    "-size", "1800x1200", "xc:#faf5e9", "-fill", "#1d1914", "-font", j.input(),
-                    "-pointsize", "190", "-annotate", "+80+260", sample,
-                    "-pointsize", "64", "-annotate", "+84+420", "The quick brown fox jumps over the lazy dog",
-                    "-pointsize", "44", "-annotate", "+84+560", "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                    "-annotate", "+84+640", "abcdefghijklmnopqrstuvwxyz",
-                    "-annotate", "+84+720", "0123456789 & ! ? @ # % ( ) « » € £",
-                    "-pointsize", "26", "-annotate", "+84+860",
+                    "-size",
+                    "1800x1200",
+                    "xc:#faf5e9",
+                    "-fill",
+                    "#1d1914",
+                    "-font",
+                    j.input(),
+                    "-pointsize",
+                    "190",
+                    "-annotate",
+                    "+80+260",
+                    sample,
+                    "-pointsize",
+                    "64",
+                    "-annotate",
+                    "+84+420",
+                    "The quick brown fox jumps over the lazy dog",
+                    "-pointsize",
+                    "44",
+                    "-annotate",
+                    "+84+560",
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                    "-annotate",
+                    "+84+640",
+                    "abcdefghijklmnopqrstuvwxyz",
+                    "-annotate",
+                    "+84+720",
+                    "0123456789 & ! ? @ # % ( ) « » € £",
+                    "-pointsize",
+                    "26",
+                    "-annotate",
+                    "+84+860",
                     "Pack my box with five dozen liquor jugs. Sphinx of black quartz, judge my vow.",
-                    "-fill", "#8a7f6f", "-pointsize", "22",
-                    "-annotate", "+84+1130", j.inputs[0].file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                    "-fill",
+                    "#8a7f6f",
+                    "-pointsize",
+                    "22",
+                    "-annotate",
+                    "+84+1130",
+                    j.inputs[0].file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
                     j.out()
                 ],
             )]
@@ -289,8 +364,19 @@ fn carousel_plan(j: &Job) -> Result<Vec<Step>, String> {
     Ok(vec![magick_to(
         j,
         args![
-            "-auto-orient", "-resize", format!("x{th}"), "-background", "white", "-gravity", "west",
-            "-extent", format!("{padded_w}x{th}"), "-crop", tile, "+repage", "+adjoin"
+            "-auto-orient",
+            "-resize",
+            format!("x{th}"),
+            "-background",
+            "white",
+            "-gravity",
+            "west",
+            "-extent",
+            format!("{padded_w}x{th}"),
+            "-crop",
+            tile,
+            "+repage",
+            "+adjoin"
         ],
         j.out_pattern("-%02d.png"),
     )])

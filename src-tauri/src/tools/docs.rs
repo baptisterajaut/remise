@@ -24,18 +24,8 @@ pub fn pandoc(j: &Job, extra: Vec<String>) -> Vec<Step> {
 
 /// Page setup for Typst PDFs.
 const PAGE: &[Param] = &[
-    Param::Select {
-        key: "paper",
-        label: "Paper",
-        options: &[("a4", "A4"), ("us-letter", "US Letter"), ("a5", "A5")],
-        default: "a4",
-    },
-    Param::Select {
-        key: "size",
-        label: "Text size",
-        options: &[("10pt", "10 pt"), ("11pt", "11 pt"), ("12pt", "12 pt")],
-        default: "11pt",
-    },
+    Param::Select { key: "paper", label: "Paper", options: &[("a4", "A4"), ("us-letter", "US Letter"), ("a5", "A5")], default: "a4" },
+    Param::Select { key: "size", label: "Text size", options: &[("10pt", "10 pt"), ("11pt", "11 pt"), ("12pt", "12 pt")], default: "11pt" },
 ];
 
 fn page_vars(j: &Job) -> Vec<String> {
@@ -145,7 +135,15 @@ pub static TOOLS: &[Tool] = &[
             vec![
                 Step::Run(
                     "gs",
-                    args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.tmp("page-%04d.txt")), j.input()],
+                    args![
+                        "-sDEVICE=txtwrite",
+                        "-dNOPAUSE",
+                        "-dBATCH",
+                        "-dQUIET",
+                        "-dPDFSTOPONERROR",
+                        gs_out(&j.tmp("page-%04d.txt")),
+                        j.input()
+                    ],
                 ),
                 Step::Then(|j| {
                     let md = j.tmp.join("book.md");

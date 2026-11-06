@@ -38,8 +38,15 @@ fn aliases(bin: &str) -> Vec<&str> {
     match bin {
         // Any Chromium will do for headless printing; Edge ships with every Windows.
         "chromium" => vec![
-            "chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome", "msedge",
-            "Google Chrome", "Chromium", "Microsoft Edge",
+            "chromium",
+            "chromium-browser",
+            "google-chrome",
+            "google-chrome-stable",
+            "chrome",
+            "msedge",
+            "Google Chrome",
+            "Chromium",
+            "Microsoft Edge",
         ],
         "gs" => vec!["gs", "gswin64c", "gswin32c"],
         "7z" => vec!["7z", "7zz", "7za", "7zzs"],
@@ -89,12 +96,7 @@ pub fn which(bin: &str) -> Option<PathBuf> {
 
 pub fn find_in(dirs: &[PathBuf], bin: &str) -> Option<PathBuf> {
     let names = aliases(bin);
-    dirs.iter().find_map(|d| {
-        names
-            .iter()
-            .flat_map(|n| [d.join(n), d.join(format!("{n}.exe"))])
-            .find(|c| c.is_file())
-    })
+    dirs.iter().find_map(|d| names.iter().flat_map(|n| [d.join(n), d.join(format!("{n}.exe"))]).find(|c| c.is_file()))
 }
 
 /// The program to run for `bin` and the arguments to give it.
@@ -135,10 +137,7 @@ pub fn command(path: &Path) -> Command {
         if let Ok(joined) = std::env::join_paths(bundled.chain(path)) {
             c.env("PATH", joined);
         }
-        let env = [
-            ("TESSDATA_PREFIX", "tesseract/tessdata"),
-            ("MAGICK_GHOSTSCRIPT_PATH", "ghostscript/bin"),
-        ];
+        let env = [("TESSDATA_PREFIX", "tesseract/tessdata"), ("MAGICK_GHOSTSCRIPT_PATH", "ghostscript/bin")];
         for (key, sub) in env {
             if v.join(sub).is_dir() {
                 c.env(key, v.join(sub));
