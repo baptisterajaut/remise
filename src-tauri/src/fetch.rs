@@ -256,7 +256,7 @@ fn unpack(d: &Download, part: &Path, into: &Path) -> Result<(), String> {
     } else if name.ends_with(".dmg") && cfg!(target_os = "macos") {
         mount_and_copy(part, into)
     } else if [".zip", ".dmg", ".AppImage"].iter().any(|e| name.ends_with(e)) {
-        run("7z", &["x", "-y", "-bso0", "-bsp0", &format!("-o{dest}"), &src], b"")
+        run("7z", &["x", "-y", "-bso0", "-bsp0", &format!("-o{dest}"), &src], b"").or_else(only_links_skipped)
     } else {
         return fs::rename(part, into.join(d.path)).map_err(|e| e.to_string());
     };
@@ -279,6 +279,14 @@ fn run(bin: &str, args: &[&str], input: &[u8]) -> Result<(), String> {
     }
     let out = child.wait_with_output().map_err(|e| e.to_string())?;
     if out.status.success() { Ok(()) } else { Err(format!("{bin} ({}): {}", out.status, String::from_utf8_lossy(&out.stderr).trim())) }
+}
+
+/// 7-Zip skips symlinks that climb with `..` (LibreOffice's AppImage has `usr/bin/* →
+/// ../../opt/…`) and exits with 2. Remise calls the program by its real path, which `locate`
+/// then checks, so that alone isn't a failure.
+pub fn only_links_skipped(err: String) -> Result<(), String> {
+    let errors: Vec<&str> = err.lines().filter(|l| l.contains("ERROR")).collect();
+    if !errors.is_empty() && errors.iter().all(|l| l.contains("Dangerous link path was ignored")) { Ok(()) } else { Err(err) }
 }
 
 /// An administrative install only unpacks (no rights needed, nothing registered). msiexec wants

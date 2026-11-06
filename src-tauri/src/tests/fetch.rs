@@ -99,3 +99,12 @@ fn an_archive_is_unpacked_and_its_program_found() {
     }
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn skipped_links_alone_are_not_a_failure() {
+    use crate::fetch::only_links_skipped;
+    let links = "7z (exit status: 2): ERROR: Dangerous link path was ignored : usr/bin/x : ../../opt/x\nERROR: Dangerous link path was ignored : usr/bin/y : ../../opt/y";
+    assert!(only_links_skipped(links.into()).is_ok());
+    assert!(only_links_skipped("7z (exit status: 2): ERROR: Data Error : opt/x".into()).is_err());
+    assert!(only_links_skipped("7z (exit status: 2): disk full".into()).is_err());
+}
