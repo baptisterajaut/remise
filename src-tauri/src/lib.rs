@@ -1,3 +1,5 @@
+#![warn(clippy::cognitive_complexity, clippy::too_many_lines)]
+
 mod tools;
 
 use serde::{Deserialize, Serialize};
