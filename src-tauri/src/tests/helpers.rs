@@ -162,6 +162,12 @@ fn every_pandoc_run_is_sandboxed_with_the_image_filter() {
 #[test]
 fn empty_password_is_refused() {
     assert!(matches!(&job("pdf-encrypt", &["/d/a.pdf"], &[("password", "")])[0], Step::Fail(_)));
+    // Never on the command line, where `ps` shows it.
+    for (id, pw) in [("pdf-encrypt", "s3cret"), ("pdf-unlock", "s3cret")] {
+        let steps = job(id, &["/d/a.pdf"], &[("password", pw)]);
+        let [Step::Write(_, body), Step::Run("qpdf", a)] = &steps[..] else { panic!("{steps:?}") };
+        assert!(body.contains(pw) && !a.iter().any(|x| x.contains(pw)), "{id}: {a:?}");
+    }
 }
 
 #[test]

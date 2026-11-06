@@ -244,14 +244,22 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[Param::Text { key: "password", label: "Password", default: "", placeholder: "required" }],
         output: Output::File { suffix: "locked", ext: |_| "pdf".into() },
-        // CBA: password goes through argv (visible in `ps` while qpdf runs), qpdf @argfile if that matters
+        // The password goes through a file in the job's private scratch folder, never argv,
+        // which any user can read in `ps` while qpdf runs.
         build: |j| {
             let pw = j.p("password");
             if pw.is_empty() {
                 // qpdf would happily "encrypt" with an empty password: a lock anyone opens.
                 return vec![Step::Fail("choose a password".into())];
             }
-            vec![Step::Run("qpdf", args!["--encrypt", pw, pw, "256", "--", j.input(), j.out()])]
+            if pw.contains(['\n', '\r']) {
+                return vec![Step::Fail("a password can't span several lines".into())];
+            }
+            let argfile = j.tmp.join("encrypt.args");
+            vec![
+                Step::Write(argfile.clone(), format!("--encrypt\n{pw}\n{pw}\n256\n--\n")),
+                Step::Run("qpdf", args![format!("@{}", s(&argfile)), j.input(), j.out()]),
+            ]
         },
     },
     Tool {
@@ -264,7 +272,13 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[Param::Text { key: "password", label: "Password", default: "", placeholder: "current password" }],
         output: Output::File { suffix: "unlocked", ext: |_| "pdf".into() },
-        build: |j| vec![Step::Run("qpdf", args![format!("--password={}", j.p("password")), "--decrypt", j.input(), j.out()])],
+        build: |j| {
+            let pw = j.tmp.join("password");
+            vec![
+                Step::Write(pw.clone(), j.p("password").to_string()),
+                Step::Run("qpdf", args![format!("--password-file={}", s(&pw)), "--decrypt", j.input(), j.out()]),
+            ]
+        },
     },
     Tool {
         id: "pdf-web",
