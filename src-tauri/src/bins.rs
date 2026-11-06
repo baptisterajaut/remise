@@ -70,6 +70,7 @@ pub fn find_in(dirs: &[PathBuf], bin: &str) -> Option<PathBuf> {
 
 /// The program to run for `bin` and the arguments to give it.
 /// ImageMagick 6 (Ubuntu 22.04/24.04, Debian 12) has no `magick`: `convert` and `montage` instead.
+// CBA: IM6's distro policy.xml still forbids PDF writes (Images to PDF); bundling the IM7 AppImage is the upgrade path
 pub fn resolve(bin: &str, args: &[String]) -> Option<(PathBuf, Vec<String>)> {
     if let Some(p) = which(bin) {
         return Some((p, args.to_vec()));
@@ -102,7 +103,6 @@ pub fn command(path: &Path) -> Command {
         let env = [
             ("TESSDATA_PREFIX", "tesseract/tessdata"),
             ("MAGICK_GHOSTSCRIPT_PATH", "ghostscript/bin"),
-            ("GS_LIB", "ghostscript/lib"),
         ];
         for (key, sub) in env {
             if v.join(sub).is_dir() {

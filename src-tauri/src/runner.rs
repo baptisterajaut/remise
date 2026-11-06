@@ -101,6 +101,7 @@ fn drain_stdout(stdout: ChildStdout, on_progress: impl Fn(f64)) -> String {
 }
 
 /// Runs one binary to completion. ffmpeg gets a real progress percentage.
+// CBA: no cancel; keeping the Child in a job table + a `cancel` command if long video jobs need it
 fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String]) -> Result<(), String> {
     let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
     let mut cmd = command(&path);

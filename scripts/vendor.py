@@ -7,7 +7,8 @@ Every download is pinned by URL and SHA-256. The tools stay separate programs (R
 only spawns them), and vendor/THIRD_PARTY.md lists each one with its licence and the
 URL of its corresponding source, which is what the GPL/AGPL/LGPL ones require.
 
-Linux builds don't vendor anything: the .deb/.rpm depend on the distro packages instead.
+Where upstream ships no relocatable build (Ghostscript, Tesseract and ImageMagick on macOS
+and Linux), the app falls back to an installed copy and greys the tool out otherwise.
 Needs `7z` on PATH for the Windows installers (preinstalled on GitHub's Windows runners).
 """
 
@@ -76,7 +77,7 @@ def tessdata(lang, sha):
     )
 
 
-def macos(arch, riedl, ffmpeg_sha, ffprobe_sha, qpdf_sha):
+def macos(arch, riedl, ffmpeg_sha, qpdf_sha):
     qarch = "arm64" if arch == "arm64" else "x86_64"
     riedl_url = f"https://ffmpeg.martin-riedl.de/download/macos/{riedl}"
     ff_source = f"https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (build recipe: {riedl_url.rsplit('/', 1)[0]})"
@@ -87,7 +88,6 @@ def macos(arch, riedl, ffmpeg_sha, ffprobe_sha, qpdf_sha):
              sha256="12ef6830317743cfd3f0ab1724bde43fcc270d8b6d8564f8c12c2a2b7f993570",
              picks=[("7zz", "7zip"), ("?License.txt", "licenses/7zip")]),
         Item(**FFMPEG, source=ff_source, url=f"{riedl_url}/ffmpeg.zip", sha256=ffmpeg_sha, picks=[("ffmpeg", "ffmpeg")]),
-        Item(**FFMPEG, source=ff_source, url=f"{riedl_url}/ffprobe.zip", sha256=ffprobe_sha, picks=[("ffprobe", "ffmpeg")]),
     ]
 
 
@@ -96,7 +96,7 @@ PLATFORMS = {
         Item(**GS, url=f"{GH}/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/gs10080w64.exe",
              sha256="52a91b8bf09298788d7a57b9206127026c23eacd75405f0a131e26dc381dce50",
              picks=[("**/bin/gswin64c.exe", "ghostscript/bin"), ("**/bin/gsdll64.dll", "ghostscript/bin"),
-                    ("**/lib/*", "ghostscript/lib"), ("?**/LICENSE", "licenses/ghostscript")]),
+                    ("?**/LICENSE", "licenses/ghostscript")]),
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-msvc64.zip",
              sha256="db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d",
              picks=[("**/bin/*", "qpdf/bin"), ("?**/LICENSE.txt", "licenses/qpdf")]),
@@ -120,7 +120,7 @@ PLATFORMS = {
         Item(**FFMPEG, source="https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (build recipe: https://www.gyan.dev/ffmpeg/builds/)",
              url=f"{GH}/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
              sha256="60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
-             picks=[("**/bin/ffmpeg.exe", "ffmpeg"), ("**/bin/ffprobe.exe", "ffmpeg"), ("?**/LICENSE*", "licenses/ffmpeg")]),
+             picks=[("**/bin/ffmpeg.exe", "ffmpeg"), ("?**/LICENSE*", "licenses/ffmpeg")]),
         Item(**POTRACE, url="https://potrace.sourceforge.net/download/1.16/potrace-1.16.win64.zip",
              sha256="63699f9885b5ed053977fd94452a7bdbb77ee62b77bf28a3f17b2f14b9b9c65d",
              picks=[("**/potrace.exe", "potrace"), ("**/COPYING", "licenses/potrace")]),
@@ -130,15 +130,29 @@ PLATFORMS = {
     # app greys those tools out with an install hint.
     "macos-arm64": macos("arm64", "arm64/1789931890_9.0.2",
                          "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
-                         "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6",
                          "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79"),
     "macos-x64": macos("x64", "amd64/1789931006_9.0.2",
                        "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4",
-                       "2322438ed2f6319a691291b247d09c69dcaa3a982460d1f269a7e1af335cfdfd",
                        "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481")
     + [Item(**POTRACE, url="https://potrace.sourceforge.net/download/1.16/potrace-1.16.mac-x86_64.tar.gz",
             sha256="7b144720c1cdf5f7d73e47e9e9a5df03ee49bcc42037498481d3a29855311940",
             picks=[("**/potrace", "potrace"), ("**/COPYING", "licenses/potrace")])],
+    # AppImage. BtbN keeps month-end autobuilds, so this tag doesn't vanish like the dailies.
+    "linux-x64": [
+        Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
+             sha256="db367d897829f22c4198ce1094143c9d467bd6ee7dfabc44ba6f02056b24f8b1",
+             picks=[("**/bin/qpdf", "qpdf/bin"), ("**/lib/*.so*", "qpdf/lib")]),
+        Item(**SEVENZIP, url=f"{GH}/ip7z/7zip/releases/download/26.05/7z2605-linux-x64.tar.xz",
+             sha256="22cf82fcc6eb7474f1d5bb4f02c0f8ebd573a718089d6833dc30f8350a3b232e",
+             picks=[("7zzs", "7zip"), ("?License.txt", "licenses/7zip")]),
+        Item(**FFMPEG, source=f"https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (build recipe: {GH}/BtbN/FFmpeg-Builds)",
+             url=f"{GH}/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-9.0.tar.xz",
+             sha256="68ee646831adaae2495618346f3bba94ff207ff83bbd34d643e7004730d66269",
+             picks=[("**/bin/ffmpeg", "ffmpeg"), ("?**/LICENSE.txt", "licenses/ffmpeg")]),
+        Item(**POTRACE, url="https://potrace.sourceforge.net/download/1.16/potrace-1.16.linux-x86_64.tar.gz",
+             sha256="158ef1cb6bde9f057510c7aa8b555117be10fa5318cd875f6a26a5811dadc2d8",
+             picks=[("**/potrace", "potrace"), ("**/COPYING", "licenses/potrace")]),
+    ],
 }
 
 
@@ -147,7 +161,8 @@ def fetch(item):
     dest = CACHE / f"{item.sha256[:16]}-{item.url.rsplit('/', 1)[1]}"
     if not dest.exists():
         print(f"  get {item.url}")
-        with urllib.request.urlopen(item.url) as r, open(dest.with_suffix(".part"), "wb") as f:
+        req = urllib.request.Request(item.url, headers={"User-Agent": "remise-vendor/1.0"})
+        with urllib.request.urlopen(req) as r, open(dest.with_suffix(".part"), "wb") as f:
             shutil.copyfileobj(r, f)
         dest.with_suffix(".part").rename(dest)
     digest = hashlib.sha256(dest.read_bytes()).hexdigest()
@@ -162,6 +177,14 @@ def unpack(archive, into):
     if name.endswith(".zip"):
         with zipfile.ZipFile(archive) as z:
             z.extractall(into)
+            # zipfile writes symlinks as text files holding the target; make them real copies
+            # (libqpdf.so.30 -> libqpdf.so.30.4.2), Tauri resources don't keep links anyway.
+            for info in z.infolist():
+                if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                    link = into / info.filename
+                    target = link.parent / link.read_text()
+                    link.unlink()
+                    shutil.copy2(target, link)
     elif name.endswith((".tar.gz", ".tgz", ".tar.xz")):
         with tarfile.open(archive) as t:
             t.extractall(into, filter="data")
@@ -193,7 +216,7 @@ def notice(items):
         "# Third-party programs bundled with Remise",
         "",
         "Remise runs these as separate programs; it does not link them. Each keeps its own licence.",
-        "Licence texts that ship with the upstream archives are under `licenses/`.",
+        "Licence texts shipped with the upstream archives are under `licenses/<tool>/`, standard texts under `licenses/texts/`.",
         "",
     ]
     seen = set()
@@ -205,6 +228,8 @@ def notice(items):
         lines += [f"## {i.name} {i.version}", "", f"- Licence: {i.license}", f"- Binary: {i.url}",
                   f"- Corresponding source: {i.source}", ""]
     (OUT / "THIRD_PARTY.md").write_text("\n".join(lines))
+    # Full texts of the licences named above, for archives that don't ship their own.
+    shutil.copytree(ROOT / "scripts" / "licenses", OUT / "licenses" / "texts", dirs_exist_ok=True)
 
 
 def main():
