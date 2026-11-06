@@ -337,8 +337,7 @@ fn chromium(j: &Job, input: String, mode: Vec<String>) -> Step {
     Step::Run("chromium", a)
 }
 
-/// `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`, read as UTC.
-// CBA: UTC, not local time; a tz crate if people care about the hour
+/// `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`, read as UTC (the caller shifts it to local time).
 pub fn parse_date(s: &str) -> Option<std::time::SystemTime> {
     let (date, time) = s.trim().split_once(' ').unwrap_or((s.trim(), "00:00"));
     let d: Vec<i64> = date.split('-').map(|x| x.parse().ok()).collect::<Option<_>>()?;

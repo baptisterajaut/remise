@@ -69,7 +69,7 @@ window.__drop = (paths) => {
 
 async function open(scheme) {
   const browser = await chromium.launch({ executablePath: exe });
-  const page = await browser.newPage({ viewport: { width: 1180, height: 780 }, colorScheme: scheme });
+  const page = await browser.newPage({ viewport: { width: 1180, height: 780 }, colorScheme: scheme, timezoneId: "Europe/Paris" });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -170,6 +170,16 @@ async function resetWall(page) {
   await page.getByRole("button", { name: /^Everything/ }).click();
 }
 
+async function datesFlow(page) {
+  await resetWall(page);
+  await page.getByRole("button", { name: /Change file dates/ }).click();
+  await page.evaluate(() => window.__drop(["/d/a.txt"]));
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.waitForSelector(".files li.done");
+  const params = await page.evaluate(() => window.__runs.at(-1).steps[0].params);
+  assert.equal(params.tz, "60", "a January date in Paris is UTC+1");
+}
+
 async function stopFlow(page) {
   await resetWall(page);
   await page.getByRole("button", { name: /Compress video/ }).click();
@@ -202,6 +212,7 @@ for (const scheme of ["light", "dark"]) {
   await wallFlow(page, shot);
   await chainFlow(page, shot);
   await generatorFlow(page, shot);
+  await datesFlow(page);
   await stopFlow(page);
   await downloadFlow(page, shot);
   await browser.close();

@@ -183,3 +183,16 @@ fn same_names_from_different_folders_stay_distinct() {
     let names = tools::distinct_names(&[PathBuf::from("/a/x.pdf"), PathBuf::from("/b/x.pdf"), PathBuf::from("/c/X.PDF")]);
     assert_eq!(names, ["x.pdf", "x-2.pdf", "X-3.PDF"]);
 }
+
+#[test]
+fn file_dates_are_local_time() {
+    let at = |tz: &str| {
+        let steps = job("file-dates", &["/d/a.txt"], &[("date", "2024-01-01 12:00"), ("tz", tz)]);
+        let Step::Touch(_, when) = steps[0] else { panic!("{steps:?}") };
+        when.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+    };
+    let noon_utc = 1_704_110_400;
+    assert_eq!(at("0"), noon_utc);
+    assert_eq!(at("60"), noon_utc - 3600, "Paris in winter: noon there is 11:00 UTC");
+    assert_eq!(at("-300"), noon_utc + 5 * 3600, "New York: noon there is 17:00 UTC");
+}

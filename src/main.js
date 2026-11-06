@@ -382,7 +382,7 @@ async function fetchMissing() {
 
 async function runRow(r) {
   const b = state.bench;
-  const steps = b.tool ? [{ tool: b.tool.id, params: b.params }] : b.chain.steps;
+  const steps = b.tool ? [{ tool: b.tool.id, params: withTimeZone(b.params) }] : b.chain.steps;
   r.state = "running";
   renderRows();
   try {
@@ -394,6 +394,14 @@ async function runRow(r) {
     if (r.err === "Stopped.") unstop(r);
   }
   renderRows();
+}
+
+/** A typed date means local time: tell the backend the UTC offset in force on that date. */
+function withTimeZone(params) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(params.date?.trim() ?? "");
+  if (!m) return params;
+  const [y, mo, d, hh = 0, mm = 0] = m.slice(1).map((x) => Number(x ?? 0));
+  return { ...params, tz: String(-new Date(y, mo - 1, d, hh, mm).getTimezoneOffset()) };
 }
 
 /** A stopped file goes back in the queue; a stopped generator run just goes away. */

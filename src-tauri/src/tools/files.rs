@@ -76,15 +76,21 @@ pub static TOOLS: &[Tool] = &[
         id: "file-dates",
         family: Family::Files,
         name: "Change file dates",
-        blurb: "Set the modified date of everything you drop (UTC).",
+        blurb: "Set the modified date of everything you drop.",
         bins: &[],
         accepts: &[],
         inputs: Inputs::Many,
         params: &[Param::Text { key: "date", label: "Date", default: "2024-01-01 12:00", placeholder: "YYYY-MM-DD HH:MM" }],
         output: Output::None,
+        // The date is wall-clock time where the user is: `tz`, minutes east of UTC on that date
+        // (summer time included), comes from the webview, which knows the local time zone.
         build: |j| match parse_date(j.p("date")) {
             None => vec![Step::Fail(format!("`{}` isn't a YYYY-MM-DD HH:MM date", j.p("date")))],
-            Some(when) => j.inputs.iter().map(|p| Step::Touch(p.clone(), when)).collect(),
+            Some(utc) => {
+                let east = std::time::Duration::from_secs(j.p("tz").trim().parse::<i64>().unwrap_or(0).unsigned_abs() * 60);
+                let when = if j.p("tz").trim().starts_with('-') { utc + east } else { utc - east };
+                j.inputs.iter().map(|p| Step::Touch(p.clone(), when)).collect()
+            }
         },
     },
     Tool {
