@@ -1,0 +1,68 @@
+name: Release
+
+# A `v*` tag builds every platform and attaches the installers to a draft GitHub release.
+# A manual run builds the same and keeps them as workflow artifacts only.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows x64, os: windows-latest, vendor: windows-x64, target: "" }
+          - { name: macOS Apple Silicon, os: macos-latest, vendor: macos-arm64, target: aarch64-apple-darwin }
+          - { name: macOS Intel, os: macos-latest, vendor: macos-x64, target: x86_64-apple-darwin }
+          - { name: Linux x64 AppImage, os: ubuntu-22.04, vendor: linux-x64, target: "" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri -> target
+          key: release-${{ matrix.vendor }}
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch bundled tools (pinned + checksummed)
+        run: python scripts/vendor.py ${{ matrix.vendor }}
+      # CBA: unsigned builds. Signing/notarization needs an Apple Developer ID and a Windows
+      # certificate; tauri-action picks them up from APPLE_* / TAURI_SIGNING_* secrets once set.
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: Remise ${{ github.ref_name }}
+          releaseBody: Local file tools. Pick the installer for your system; bundled third-party tools are listed in THIRD_PARTY.md inside the app.
+          releaseDraft: true
+          uploadWorkflowArtifacts: true
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --config src-tauri/tauri.vendor.conf.json

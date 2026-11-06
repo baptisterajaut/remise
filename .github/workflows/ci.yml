@@ -49,3 +49,44 @@ jobs:
       - name: UI walkthrough
         if: runner.os == 'Linux'
         run: pnpm test:ui
+
+  # Every tool against real binaries: the bundled ones (vendor/) plus, where upstream has no
+  # relocatable build, the system packages a user would install.
+  smoke:
+    name: Smoke (${{ matrix.vendor }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, vendor: windows-x64 }
+          - { os: ubuntu-24.04, vendor: linux-x64 }
+          - { os: macos-latest, vendor: macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Linux deps (webview to compile, IM6/gs/tesseract from the distro)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
+            ghostscript tesseract-ocr imagemagick
+          # Ubuntu's ImageMagick 6 policy forbids writing PDF; the fixtures need it.
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+      - name: macOS deps without a relocatable upstream build
+        if: runner.os == 'macOS'
+        run: brew install ghostscript tesseract imagemagick potrace
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri -> target
+      - run: python scripts/vendor.py ${{ matrix.vendor }}
+      - run: cargo test --manifest-path src-tauri/Cargo.toml -- --ignored smoke --nocapture
+        env:
+          REMISE_VENDOR: ${{ github.workspace }}/vendor
