@@ -422,7 +422,7 @@ pub static TOOLS: &[Tool] = &[
         family: Family::Pdf,
         name: "Sign",
         blurb: "Drop a PDF and a signature image (transparent PNG is best).",
-        bins: &["magick", "qpdf"],
+        bins: &["gs", "magick", "qpdf"],
         accepts: &["pdf", "png", "jpg", "jpeg", "webp"],
         inputs: Inputs::Many,
         params: &[
@@ -441,39 +441,17 @@ pub static TOOLS: &[Tool] = &[
             },
         ],
         output: Output::File { suffix: "signed", ext: |_| "pdf".into() },
-        // CBA: the signature page is A4; qpdf scales it to fit other page sizes, so placement drifts on Letter/odd sizes
-        build: |j| {
-            let (pdf, sig) = match pair(j, &["pdf"], &["png", "jpg", "jpeg", "webp"], "a PDF and a signature image") {
-                Ok(p) => p,
-                Err(fail) => return vec![fail],
-            };
-            let layer = j.tmp("signature.pdf");
-            vec![
-                Step::Run(
-                    "magick",
-                    args![
-                        "-size",
-                        "1240x1754",
-                        "xc:none",
-                        "(",
-                        sig,
-                        "-resize",
-                        format!("{}x", j.p("width")),
-                        ")",
-                        "-gravity",
-                        j.p("corner"),
-                        "-geometry",
-                        "+90+110",
-                        "-composite",
-                        "-units",
-                        "PixelsPerInch",
-                        "-density",
-                        "150",
-                        layer.clone()
-                    ],
-                ),
-                Step::Run("qpdf", args![pdf, "--overlay", layer, format!("--to={}", j.p("pages")), "--from=", "--repeat=1", "--", j.out()]),
-            ]
+        // CBA: the layer is cut to page 1's size; qpdf scales it onto pages of another size
+        build: |j| match pair(j, &["pdf"], &["png", "jpg", "jpeg", "webp"], "a PDF and a signature image") {
+            Err(fail) => vec![fail],
+            Ok((pdf, _)) => vec![
+                Step::Capture {
+                    bin: "magick",
+                    args: args!["identify", "-density", "72", "-format", "%w %h\n", format!("{pdf}[0]")],
+                    into: j.tmp.join("size.txt"),
+                },
+                Step::Then(sign_plan),
+            ],
         },
     },
     Tool {
@@ -702,4 +680,38 @@ pub fn ocr(j: &Job, device: &str) -> Vec<Step> {
     ];
     steps.push(Step::Run("gs", a));
     steps
+}
+
+/// A transparent page the size of page 1 (at 150 dpi) with the signature in a corner, laid
+/// over the chosen pages.
+fn sign_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let (pdf, sig) = match pair(j, &["pdf"], &["png", "jpg", "jpeg", "webp"], "a PDF and a signature image") {
+        Ok(p) => p,
+        Err(fail) => return Ok(vec![fail]),
+    };
+    let (w, h) = size_of(j)?;
+    let px = |pt: f64| (pt / 72.0 * 150.0).round();
+    let layer = j.tmp("signature.pdf");
+    let draw = args![
+        "-size",
+        format!("{}x{}", px(w), px(h)),
+        "xc:none",
+        "(",
+        sig,
+        "-resize",
+        format!("{}x", j.p("width")),
+        ")",
+        "-gravity",
+        j.p("corner"),
+        "-geometry",
+        "+90+110",
+        "-composite",
+        "-units",
+        "PixelsPerInch",
+        "-density",
+        "150",
+        layer.clone()
+    ];
+    let overlay = args![pdf, "--overlay", layer, format!("--to={}", j.p("pages")), "--from=", "--repeat=1", "--", j.out()];
+    Ok(vec![Step::Run("magick", draw), Step::Run("qpdf", overlay)])
 }

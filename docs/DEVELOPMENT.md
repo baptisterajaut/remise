@@ -82,7 +82,7 @@ These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):
 - **Stop** kills the program a job is running, not the ones that program started itself (LibreOffice's `soffice.bin`, yt-dlp's FFmpeg).
 - **Change file dates** reads the date as UTC.
 - **Stamp** uses light tints instead of transparency, because `.setfillconstantalpha` errors out in Ghostscript 10.08.
-- **Sign** expects A4 pages, and the signature drifts a little on other page sizes.
+- **Sign** and **Crop margins** take page 1's size for every page; on a PDF that mixes page sizes, the others are approximate.
 - **PDF to Ebook** keeps the text only.
 - **Documents** go through Pandoc's sandbox, and only images come back in: those in the file's folder or below it, and `http(s)` images (downloaded, kept only if the server says it's an image). Anything else becomes its alt text. A symlink inside the folder is still followed (Pandoc's Lua has no `lstat`).
 - **AI Upscale** (waifu2x) needs a Vulkan graphics driver. Every recent GPU driver has one, and on Linux Mesa provides one even without a GPU (lavapipe). It works out of the box on Macs.
