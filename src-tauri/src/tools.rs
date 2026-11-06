@@ -1341,7 +1341,8 @@ mod tests {
         assert!(matches!(steps[1], Step::ListDir { ext: "png", .. }));
         let (bin, a) = run_args(&steps[2]);
         assert_eq!(bin, "tesseract");
-        assert_eq!(a, ["/tmp/job/pages.txt", "/d/scan.ocr", "-l", "fra", "pdf"]);
+        let list = s(&PathBuf::from("/tmp/job").join("pages.txt"));
+        assert_eq!(a, [list.as_str(), "/d/scan.ocr", "-l", "fra", "pdf"]);
     }
 
     #[test]
@@ -1372,7 +1373,8 @@ mod tests {
     fn frame_pattern_escapes_path_percent_but_not_counter() {
         let steps = job("vid-frames", &["/d/50%off.mp4"], "/d/50%off.frames", &[]);
         let (_, a) = run_args(&steps[0]);
-        assert_eq!(*a.last().unwrap(), "/d/50%%off.frames/50%%off-%04d.jpg");
+        let dir = s(&PathBuf::from("/d/50%off.frames").join("50%off")).replace('%', "%%");
+        assert_eq!(*a.last().unwrap(), format!("{dir}-%04d.jpg"));
     }
 
     #[test]
