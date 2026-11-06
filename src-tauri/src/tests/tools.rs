@@ -24,11 +24,12 @@ fn run_args(step: &Step) -> (&'static str, Vec<&str>) {
 
 #[test]
 fn ids_are_unique_and_params_have_valid_defaults() {
-    let mut ids: Vec<_> = TOOLS.iter().map(|t| t.id).collect();
+    let mut ids: Vec<_> = all().map(|t| t.id).collect();
+    let total = ids.len();
     ids.sort();
     ids.dedup();
-    assert_eq!(ids.len(), TOOLS.len());
-    for t in TOOLS {
+    assert_eq!(ids.len(), total);
+    for t in all() {
         for p in t.params {
             if let Param::Select { options, default, .. } = p {
                 assert!(options.iter().any(|(v, _)| v == default), "{}: bad default", t.id);

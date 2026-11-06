@@ -3,7 +3,7 @@
 
 use crate::bins::{command, resolve};
 use crate::runner::{run_chain, StepReq};
-use crate::tools::{self, Family, TOOLS};
+use crate::tools::{self, Family};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -88,7 +88,7 @@ fn smoke_every_tool() {
     };
     // Skipped here: they need a previous output, move files, or an optional AI model / app.
     let later = ["pdf-studio", "img-remove-bg", "batch-rename", "pdf-unlock", "arc-extract"];
-    for t in TOOLS.iter().filter(|t| !later.contains(&t.id)) {
+    for t in tools::all().filter(|t| !later.contains(&t.id)) {
         check(t.id, &inputs_for(t, &fx), params_for(t.id));
     }
     let zip = go("arc-create", &[&fx.png, &fx.pdf], &[]).unwrap();

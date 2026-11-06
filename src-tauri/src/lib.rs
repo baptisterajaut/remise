@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
-use tools::{Family, Output, Param, TOOLS};
+use tools::{Family, Output, Param};
 
 #[derive(Serialize)]
 struct ToolInfo {
@@ -43,8 +43,7 @@ fn produces(t: &tools::Tool) -> Option<String> {
 #[tauri::command]
 fn list_tools() -> Vec<ToolInfo> {
     let mut found: HashMap<&str, bool> = HashMap::new();
-    TOOLS
-        .iter()
+    tools::all()
         .map(|t| ToolInfo {
             id: t.id,
             family: t.family,
