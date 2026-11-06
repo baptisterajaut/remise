@@ -149,7 +149,9 @@ PLATFORMS = {
              source=f"{GH}/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz",
              url=f"{GH}/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe",
              sha256="bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4",
-             picks=[("tesseract.exe", "tesseract"), ("*.dll", "tesseract")]),
+             # configs/pdf, configs/txt and pdf.ttf: the PDF/text renderers silently write nothing without them.
+             picks=[("tesseract.exe", "tesseract"), ("*.dll", "tesseract"),
+                    ("tessdata/configs/*", "tesseract/tessdata/configs"), ("tessdata/pdf.ttf", "tesseract/tessdata")]),
         tessdata("eng", "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"),
         tessdata("fra", "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca"),
         Item(name="ImageMagick", version="7.1.2-35",

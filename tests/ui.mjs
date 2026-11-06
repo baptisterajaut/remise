@@ -10,7 +10,10 @@ import assert from "node:assert/strict";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "src");
-const manifest = readFileSync(process.env.REMISE_MANIFEST ?? join(ROOT, "src-tauri/target/manifest.json"), "utf8");
+// Every tool marked as installed: the walk-through tests the UI, not this machine's binaries.
+const manifest = JSON.stringify(
+  JSON.parse(readFileSync(process.env.REMISE_MANIFEST ?? join(ROOT, "src-tauri/target/manifest.json"), "utf8")).map((t) => ({ ...t, missing: [] })),
+);
 const exe =
   process.env.CHROMIUM ??
   ["/usr/bin/chromium", "/usr/bin/google-chrome", "/usr/bin/chromium-browser"].find((p) => existsSync(p));
