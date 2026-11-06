@@ -2,38 +2,70 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
+    <title>Remise</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="main.js" defer></script>
   </head>
-
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
-
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
+    <header class="top">
+      <div class="brand">
+        <h1>remise</h1>
+        <p class="tag">local file tools &mdash; <span id="tool-count">0</span> on the wall, <b>0 bytes uploaded</b></p>
       </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+      <label class="search">
+        <span class="sr">Search tools</span>
+        <input id="search" type="search" placeholder="find a tool…  ( / )" autocomplete="off" spellcheck="false" />
+      </label>
+    </header>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+    <nav class="rail" id="rail" aria-label="Families"></nav>
+
+    <main id="main">
+      <section id="wall" class="wall" aria-label="Tools"></section>
+
+      <section id="bench" class="bench" hidden aria-live="polite">
+        <button class="back" id="back" type="button">&larr; back to the wall</button>
+        <div class="bench-grid">
+          <div class="card spec">
+            <p class="eyebrow" id="bench-family"></p>
+            <h2 id="bench-title"></h2>
+            <p class="blurb" id="bench-blurb"></p>
+            <form id="params" class="params" onsubmit="return false"></form>
+            <div id="chain-steps" class="chain-steps" hidden></div>
+          </div>
+          <div class="card queue">
+            <div class="drop" id="drop">
+              <p><b>Drop files here</b> or <button type="button" class="link" id="browse">browse</button></p>
+              <p class="accepts" id="accepts"></p>
+            </div>
+            <ol id="files" class="files"></ol>
+            <div class="actions">
+              <button type="button" class="ghost" id="clear">Clear</button>
+              <button type="button" class="go" id="run">Run</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="chains" class="chains" hidden>
+        <div class="card builder">
+          <p class="eyebrow">New chain</p>
+          <h2>Tools in a row</h2>
+          <p class="blurb">Each step's output feeds the next. Only the last result lands next to your file.</p>
+          <input id="chain-name" class="chain-name" placeholder="Name it — e.g. Scan to archive" />
+          <ol id="chain-draft" class="chain-draft"></ol>
+          <div class="add-step">
+            <select id="chain-add" aria-label="Add a step"></select>
+            <button type="button" class="ghost" id="chain-add-btn">Add step</button>
+          </div>
+          <button type="button" class="go" id="chain-save">Save chain</button>
+        </div>
+        <div id="chain-list" class="chain-list"></div>
+      </section>
     </main>
+
+    <div id="dropveil" class="dropveil" hidden><p>Drop to see what fits</p></div>
+    <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>

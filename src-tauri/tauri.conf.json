@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "remise",
+  "productName": "Remise",
   "version": "0.1.0",
   "identifier": "tools.remise.app",
   "build": {
@@ -10,13 +10,15 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "remise",
-        "width": 800,
-        "height": 600
+        "title": "Remise",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 760,
+        "minHeight": 540
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
     }
   },
   "bundle": {
@@ -28,6 +30,8 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "Local file tools: PDF, image, video, audio, archives.",
+    "category": "Utility"
   }
 }

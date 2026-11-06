@@ -341,6 +341,7 @@ async fn run(app: AppHandle, job: String, steps: Vec<StepReq>, inputs: Vec<Strin
 pub fn run_app() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![list_tools, run])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
