@@ -121,6 +121,17 @@ fn drain_stdout(stdout: ChildStdout, on_progress: impl Fn(f64)) -> String {
     Vec::from(tail).join("\n")
 }
 
+/// The program and everything it started: its process group on Unix, its tree on Windows.
+fn kill_tree(pid: u32) {
+    #[cfg(unix)]
+    let killer = which("kill").map(|k| (k, vec!["-KILL".to_string(), "--".into(), format!("-{pid}")]));
+    #[cfg(windows)]
+    let killer = which("taskkill").map(|k| (k, vec!["/T".to_string(), "/F".into(), "/PID".into(), pid.to_string()]));
+    if let Some((path, args)) = killer {
+        let _ = command(&path).args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+}
+
 /// `{bindir}`: data that ships next to a tool's binary (waifu2x models). A whole argument
 /// `{which:NAME}`: where another program or a downloaded model is.
 fn expand(arg: &str, bindir: &str) -> String {
@@ -143,6 +154,9 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
     if bin == "ffmpeg" {
         cmd.args(["-progress", "pipe:1", "-nostats"]);
     }
+    // Its own process group, so Stop also reaches what it starts (soffice.bin, yt-dlp's ffmpeg).
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     let mut child =
         cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("{bin}: {e}"))?;
     let duration = Arc::new(Mutex::new(None));
@@ -152,12 +166,12 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
             emit(&Progress { pct: Some((secs / d).clamp(0.0, 1.0)), ..*p });
         }
     });
-    // CBA: kills the program, not programs it started itself (soffice.bin, yt-dlp's ffmpeg)
     let status = loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             break status;
         }
         if stopped(p.job) {
+            kill_tree(child.id());
             let _ = child.kill();
             let _ = child.wait();
             return Err(STOPPED_MSG.into());
