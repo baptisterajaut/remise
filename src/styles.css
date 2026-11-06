@@ -63,6 +63,11 @@
   box-sizing: border-box;
 }
 
+/* class display rules must not resurrect hidden elements */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -445,7 +450,7 @@ main {
   gap: 14px;
 }
 
-.params label {
+.params .field {
   display: grid;
   gap: 6px;
   font-family: var(--mono);
@@ -865,4 +870,8 @@ main {
     animation: none !important;
     transition: none !important;
   }
+}
+
+.rail button[aria-current="true"] .dot {
+  box-shadow: 0 0 0 2px var(--paper);
 }

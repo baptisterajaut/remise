@@ -426,3 +426,12 @@ mod smoke {
         let _ = fs::remove_dir_all(&d);
     }
 }
+
+/// Dumps the tool manifest for UI tests: `REMISE_MANIFEST=out.json cargo test -- --ignored manifest`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn manifest() {
+    let path = std::env::var("REMISE_MANIFEST").unwrap();
+    fs::write(path, serde_json::to_string_pretty(&list_tools()).unwrap()).unwrap();
+}

@@ -34,6 +34,7 @@ function h(tag, props = {}, ...kids) {
   for (const [k, v] of Object.entries(props)) {
     if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else if (k === "style") el.style.cssText = v;
+    else if (k.startsWith("aria-")) el.setAttribute(k, String(v));
     else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
   }
   el.append(...kids.flat().filter((x) => x != null && x !== false));
@@ -165,7 +166,7 @@ function renderWall() {
 /* ───────────────────────── params form ───────────────────────── */
 
 function segmented(p, values, onChange) {
-  const seg = h("div", { class: "seg", role: "group" });
+  const seg = h("div", { class: "seg" });
   const paint = () =>
     seg.replaceChildren(
       ...p.options.map(([v, label]) =>
@@ -190,8 +191,15 @@ function control(p, values, onChange) {
   return sel;
 }
 
+/** A label wraps exactly one control; a row of toggle buttons is a named group instead. */
+function field(p, values, onChange) {
+  const ctl = control(p, values, onChange);
+  if (ctl.classList.contains("seg")) return h("div", { class: "field", role: "group", "aria-label": p.label }, h("span", {}, p.label), ctl);
+  return h("label", { class: "field" }, p.label, ctl);
+}
+
 function paramsForm(tool, values, onChange) {
-  return tool.params.map((p) => h("label", {}, p.label, control(p, values, onChange)));
+  return tool.params.map((p) => field(p, values, onChange));
 }
 
 /* ───────────────────────── bench (one tool or one chain) ───────────────────────── */
@@ -380,7 +388,7 @@ function addStep() {
 function saveChain() {
   const name = $("chain-name").value.trim();
   if (!name || state.draft.length < 2) return toast("A chain needs a name and at least two steps");
-  state.chains.push({ id: crypto.randomUUID(), name, steps: state.draft });
+  state.chains.push({ id: `c${Date.now().toString(36)}`, name, steps: state.draft });
   save("remise.chains", state.chains);
   state.draft = [];
   $("chain-name").value = "";
