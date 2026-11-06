@@ -9,6 +9,7 @@ mod tests;
 
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 use tools::{Family, Output, Param, TOOLS};
 
@@ -22,7 +23,21 @@ struct ToolInfo {
     multi: bool,
     params: &'static [Param],
     output: &'static str,
+    /// Extension of the file it writes with default params, so the chain builder knows what can follow.
+    produces: Option<String>,
     missing: Vec<&'static str>,
+}
+
+fn produces(t: &tools::Tool) -> Option<String> {
+    let Output::File { ext, .. } = &t.output else { return None };
+    let sample = format!("input.{}", t.accepts.first().unwrap_or(&"bin"));
+    let job = tools::Job {
+        inputs: vec![PathBuf::from(sample)],
+        out: PathBuf::new(),
+        tmp: PathBuf::new(),
+        params: tools::with_defaults(t, HashMap::new()),
+    };
+    Some(ext(&job))
 }
 
 #[tauri::command]
@@ -43,6 +58,7 @@ fn list_tools() -> Vec<ToolInfo> {
                 Output::Dir(_) => "dir",
                 Output::None => "none",
             },
+            produces: produces(t),
             missing: t
                 .bins
                 .iter()

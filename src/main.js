@@ -395,11 +395,9 @@ function renderAddStep() {
   $("chain-add-btn").disabled = !options.length;
 }
 
-/** Output family of a step is a guess from its accepted inputs; good enough to keep nonsense out. */
+/** `produces` is the previous tool's output extension with default params. */
 function takesOutputOf(next, prev) {
-  if (!next.accepts.length) return true;
-  const outFam = { pdf: ["pdf"], image: ["png", "jpg", "webp"], video: ["mp4", "gif"], audio: ["mp3", "wav"], files: ["zip"] }[prev.family];
-  return outFam.some((e) => next.accepts.includes(e));
+  return !next.accepts.length || next.accepts.includes(prev.produces);
 }
 
 function addStep() {

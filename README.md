@@ -37,7 +37,7 @@ Releases come in four builds: Windows x64 (NSIS installer), macOS Apple Silicon 
 
 The app looks for bundled binaries first, then for ones you have installed. A tool whose binary is missing shows up hatched on the wall, with the install command in its tooltip.
 
-The builds are not code-signed yet. On macOS, right-click the app and choose **Open** the first time. On Windows, choose **More info → Run anyway** in SmartScreen.
+The builds are not code-signed yet. On macOS, right-click the app and choose **Open** the first time. If a bundled tool is still blocked, run `xattr -dr com.apple.quarantine /Applications/Remise.app`. On Windows, choose **More info → Run anyway** in SmartScreen.
 
 ## How it works
 

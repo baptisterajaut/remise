@@ -109,6 +109,14 @@ async function chainFlow(page, shot) {
   await page.waitForSelector(".files li.done");
   const run = await page.evaluate(() => window.__runs.at(-1));
   assert.deepEqual(run.steps.map((s) => s.tool), ["pdf-compress", "pdf-grayscale", "pdf-web"]);
+
+  // What may follow depends on what the previous step actually writes, not on its family.
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /Chains/ }).click();
+  await page.selectOption("#chain-add", "vid-extract-audio");
+  await page.click("#chain-add-btn");
+  const next = await page.locator("#chain-add option").evaluateAll((os) => os.map((o) => o.value));
+  assert.ok(next.includes("aud-compress") && !next.includes("pdf-compress"), "audio tools follow Extract audio");
 }
 
 for (const scheme of ["light", "dark"]) {
