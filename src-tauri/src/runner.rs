@@ -11,6 +11,25 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStderr, ChildStdout, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// Jobs the user stopped: checked between steps, and every 100 ms while a program runs.
+static STOPPED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+pub const STOPPED_MSG: &str = "Stopped.";
+
+/// Stops `job`: kills the program it is running and skips its remaining steps. Results only
+/// leave the scratch folder at the end, so a stopped job leaves no half-written file.
+pub fn stop(job: &str) {
+    STOPPED.lock().unwrap_or_else(|e| e.into_inner()).push(job.to_string());
+}
+
+fn stopped(job: &str) -> bool {
+    STOPPED.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|j| j == job)
+}
+
+fn forget_stop(job: &str) {
+    STOPPED.lock().unwrap_or_else(|e| e.into_inner()).retain(|j| j != job);
+}
 
 #[derive(Deserialize)]
 pub struct StepReq {
@@ -113,7 +132,6 @@ fn expand(arg: &str, bindir: &str) -> String {
 }
 
 /// Runs one binary to completion. ffmpeg gets a real progress percentage.
-// CBA: no cancel; keeping the Child in a job table + a `cancel` command if long video jobs need it
 fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>) -> Result<(), String> {
     let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
     let bindir = path.parent().map(tools::s).unwrap_or_default();
@@ -134,7 +152,18 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
             emit(&Progress { pct: Some((secs / d).clamp(0.0, 1.0)), ..*p });
         }
     });
-    let status = child.wait().map_err(|e| e.to_string())?;
+    // CBA: kills the program, not programs it started itself (soffice.bin, yt-dlp's ffmpeg)
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        if stopped(p.job) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(STOPPED_MSG.into());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
     let stderr = stderr.join().unwrap_or_default();
     if status.success() {
         return Ok(());
@@ -265,7 +294,12 @@ impl Chain<'_> {
         let p = Progress { job: self.job_id, step: i, steps: self.steps, pct: None };
         (self.emit)(&p);
         let mut produced = Vec::new();
-        let outcome = (tool.build)(&job).into_iter().try_for_each(|s| run_step(self.emit, &p, &job, s, &mut produced));
+        let outcome = (tool.build)(&job).into_iter().try_for_each(|s| {
+            if stopped(self.job_id) {
+                return Err(STOPPED_MSG.to_string());
+            }
+            run_step(self.emit, &p, &job, s, &mut produced)
+        });
         match (&tool.output, outcome) {
             (Output::Dir(_), Err(e)) => {
                 let _ = fs::remove_dir_all(&job.out);
@@ -302,6 +336,7 @@ pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<Stri
     if steps.is_empty() || (inputs.is_empty() && !generator) {
         return Err("nothing to do".into());
     }
+    forget_stop(job_id);
     let mut current: Vec<PathBuf> = inputs.iter().map(PathBuf::from).collect();
     let (home, stem) = match current.first() {
         Some(first) => (first.parent().map(Path::to_path_buf).unwrap_or_default(), stem_of(first)),
@@ -313,5 +348,6 @@ pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<Stri
         Ok::<(), String>(())
     });
     let _ = fs::remove_dir_all(&chain.scratch);
+    forget_stop(job_id);
     result.map(|()| current.iter().map(|p| tools::s(p)).collect())
 }

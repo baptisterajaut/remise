@@ -335,6 +335,28 @@ fn smoke_downloads_then_use_them() {
     let _ = fs::remove_dir_all(&fx.dir);
 }
 
+/// Stop kills the program mid-way and leaves nothing next to the input.
+#[test]
+#[ignore]
+fn smoke_stop_kills_the_running_program() {
+    let fx = fixtures("stop");
+    let long = fx.dir.join("long.mp4");
+    sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "testsrc=s=1280x720:d=60", "-pix_fmt", "yuv420p", "-preset", "ultrafast", &tools::s(&long)]);
+    let before = fs::read_dir(&fx.dir).unwrap().count();
+    let stopper = std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        crate::runner::stop("stopme");
+    });
+    let started = std::time::Instant::now();
+    let req = StepReq { tool: "vid-compress".into(), params: HashMap::from([("crf".into(), "18".into())]) };
+    let res = run_chain(&|_| {}, "stopme", vec![req], vec![tools::s(&long)], &fx.dir);
+    stopper.join().unwrap();
+    assert_eq!(res, Err(crate::runner::STOPPED_MSG.to_string()));
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "stopped quickly");
+    assert_eq!(fs::read_dir(&fx.dir).unwrap().count(), before, "no partial output");
+    let _ = fs::remove_dir_all(&fx.dir);
+}
+
 /// A document's own images make it through Pandoc's sandbox; anything pointing elsewhere on the
 /// disk (absolute path, `..`, `file://`, raw HTML, a YAML `css:`) or isn't an image does not.
 #[test]

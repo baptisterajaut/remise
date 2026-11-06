@@ -81,7 +81,7 @@ These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):
 - **Join videos** copies streams without re-encoding, so the clips need matching codecs.
 - **Insert clip** needs both videos to have an audio track.
 - **Batch rename** has no live preview and no undo.
-- **Running jobs** can't be cancelled yet.
+- **Stop** kills the program a job is running, not the ones that program started itself (LibreOffice's `soffice.bin`, yt-dlp's FFmpeg).
 - **Change file dates** reads the date as UTC.
 - **Stamp** uses light tints instead of transparency, because `.setfillconstantalpha` errors out in Ghostscript 10.08.
 - **Sign** expects A4 pages, and the signature drifts a little on other page sizes.

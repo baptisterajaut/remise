@@ -27,6 +27,7 @@ window.__TAURI__ = {
       if (cmd === "list_tools") return ${manifest}.map((t) => ({ ...t, missing: window.__missing[t.id] ?? [] }));
       if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129 } };
       if (cmd === "download") return window.__download(args);
+      if (cmd === "stop") return window.__pending[args.job]?.("Stopped.");
       return window.__run(args);
     },
   },
@@ -44,8 +45,11 @@ window.__download = ({ bin }) => new Promise((res) => {
   setTimeout(() => { window.__missing = {}; res(); }, 150);
 });
 window.__runs = [];
+window.__pending = {};
 window.__run = (args) => new Promise((res, rej) => {
   window.__runs.push(args);
+  // A "slow" file only ends when stopped.
+  if ((args.inputs[0] ?? "").includes("slow")) return (window.__pending[args.job] = rej);
   let p = 0;
   const t = setInterval(() => {
     p += 0.25;
@@ -158,9 +162,29 @@ async function generatorFlow(page, shot) {
   assert.ok(names.includes("Device mockup") && !names.includes("Gradient") && !names.includes("QR code"));
 }
 
-async function downloadFlow(page, shot) {
-  await page.getByRole("button", { name: "show all" }).click();
+/** Back to the whole wall: no dropped-file filter, every family. */
+async function resetWall(page) {
+  await page.keyboard.press("Escape");
+  const all = page.getByRole("button", { name: "show all" });
+  if (await all.isVisible()) await all.click();
   await page.getByRole("button", { name: /^Everything/ }).click();
+}
+
+async function stopFlow(page) {
+  await resetWall(page);
+  await page.getByRole("button", { name: /Compress video/ }).click();
+  await page.evaluate(() => window.__drop(["/d/slow.mp4", "/d/next.mp4"]));
+  const run = page.locator("#run");
+  await run.click();
+  await page.waitForFunction(() => document.getElementById("run").textContent === "Stop");
+  await run.click();
+  await page.waitForFunction(() => document.getElementById("run").textContent === "Run");
+  assert.equal(await page.locator(".files li.done, .files li.fail").count(), 0, "nothing failed, nothing ran after");
+  assert.ok(!(await page.evaluate(() => window.__runs.some((r) => r.inputs[0] === "/d/next.mp4"))), "the next file waits");
+}
+
+async function downloadFlow(page, shot) {
+  await resetWall(page);
   await page.getByRole("button", { name: /HTML to PDF/ }).click();
   const run = page.locator("#run");
   assert.equal(await run.textContent(), "Download Chromium (129 MB)");
@@ -178,6 +202,7 @@ for (const scheme of ["light", "dark"]) {
   await wallFlow(page, shot);
   await chainFlow(page, shot);
   await generatorFlow(page, shot);
+  await stopFlow(page);
   await downloadFlow(page, shot);
   await browser.close();
   assert.deepEqual(errors, [], "no console errors");

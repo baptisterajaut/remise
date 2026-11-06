@@ -349,7 +349,7 @@ function renderRows() {
   const missing = [...new Set(benchTools().flatMap((t) => t.missing))];
   const run = $("run");
   const ready = b.tool?.generator || b.rows.some((r) => r.state === "queued");
-  run.disabled = b.running || state.fetching || (missing.length ? !fetchable(missing) : !ready);
+  run.disabled = Boolean(state.fetching) || b.stopping || (!b.running && (missing.length ? !fetchable(missing) : !ready));
   run.textContent = runLabel(missing);
   run.title = missing.length ? installHint(missing) : "";
 }
@@ -358,7 +358,8 @@ function runLabel(missing) {
   if (state.fetching) return `Downloading… ${Math.round((state.fetching.pct ?? 0) * 100)} %`;
   if (fetchable(missing)) return `Download ${missing.map((m) => state.downloads[m].name).join(" + ")} (${missing.reduce((n, m) => n + state.downloads[m].mb, 0)} MB)`;
   if (missing.length) return `Needs ${missing.map(product).join(", ")}`;
-  if (state.bench.running) return "Running…";
+  if (state.bench.stopping) return "Stopping…";
+  if (state.bench.running) return "Stop";
   return state.bench.tool?.generator ? "Make it" : "Run";
 }
 
@@ -390,21 +391,43 @@ async function runRow(r) {
   } catch (e) {
     r.state = "fail";
     r.err = String(e);
+    if (r.err === "Stopped.") unstop(r);
   }
+  renderRows();
+}
+
+/** A stopped file goes back in the queue; a stopped generator run just goes away. */
+function unstop(r) {
+  const b = state.bench;
+  if (!r.paths.length) b.rows.splice(b.rows.indexOf(r), 1);
+  Object.assign(r, { state: "queued", err: null, pct: null });
+}
+
+function stopRun() {
+  const b = state.bench;
+  b.stopping = true;
+  const r = b.rows.find((x) => x.state === "running");
+  if (r) invoke("stop", { job: r.id });
   renderRows();
 }
 
 async function runAll() {
   const b = state.bench;
+  if (b.running) return stopRun();
   if (benchTools().some((t) => t.missing.length)) return fetchMissing();
   if (b.tool?.generator) b.rows.push(row([]));
   b.running = true;
   // Sequential on purpose: these tools already use every core.
-  for (const r of b.rows.filter((x) => x.state === "queued")) await runRow(r);
-  b.running = false;
+  for (const r of b.rows.filter((x) => x.state === "queued")) {
+    if (b.stopping) break;
+    await runRow(r);
+  }
+  const stopped = b.stopping;
+  b.running = b.stopping = false;
   renderRows();
   const failed = b.rows.filter((r) => r.state === "fail").length;
-  toast(failed ? `${failed} failed — details under each file` : "All done. Originals untouched.");
+  if (stopped) toast("Stopped. What was left is still queued; press Run to go on.");
+  else toast(failed ? `${failed} failed — details under each file` : "All done. Originals untouched.");
 }
 
 function onProgress({ payload }) {

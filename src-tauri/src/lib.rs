@@ -90,6 +90,12 @@ async fn run(app: AppHandle, job: String, steps: Vec<runner::StepReq>, inputs: V
     .map_err(|e| e.to_string())?
 }
 
+/// Stops a running job (the bench's Stop button).
+#[tauri::command]
+fn stop(job: String) {
+    runner::stop(&job);
+}
+
 #[derive(Serialize)]
 struct DownloadInfo {
     name: &'static str,
@@ -130,7 +136,7 @@ pub fn run_app() {
             bins::set_user_tools(app.path().app_local_data_dir().ok().map(|d| d.join("tools")));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_tools, run, downloads, download])
+        .invoke_handler(tauri::generate_handler![list_tools, run, stop, downloads, download])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
