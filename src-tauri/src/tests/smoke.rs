@@ -12,8 +12,8 @@ use std::process::Stdio;
 fn sh(bin: &str, args: &[&str]) {
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
     let (path, args) = resolve(bin, &args).unwrap_or_else(|| panic!("{bin} not found"));
-    let ok = command(&path).args(&args).stdout(Stdio::null()).stderr(Stdio::null()).status();
-    assert!(ok.unwrap().success(), "fixture {bin} {args:?}");
+    let out = command(&path).args(&args).stdin(Stdio::null()).output().unwrap();
+    assert!(out.status.success(), "fixture {bin} {args:?}\n{}", String::from_utf8_lossy(&out.stderr));
 }
 
 fn go(tool: &str, inputs: &[&Path], params: &[(&str, &str)], home: &Path) -> Result<Vec<String>, String> {
@@ -98,7 +98,8 @@ fn fixtures(test: &str) -> Fixtures {
         dir: dir.clone(),
     };
     let p = |x: &PathBuf| x.to_str().unwrap().to_string();
-    sh("magick", &["-size", "640x400", "xc:white", "-fill", "black", "-pointsize", "48", "-annotate", "+40+200", "Hello Remise", &p(&fx.png)]);
+    let font = tools::system_font();
+    sh("magick", &["-size", "640x400", "xc:white", "-font", &font, "-fill", "black", "-pointsize", "48", "-annotate", "+40+200", "Hello Remise", &p(&fx.png)]);
     sh("magick", &["-size", "320x200", "gradient:orange-navy", &p(&fx.png2)]);
     sh("magick", &[&p(&fx.png), &p(&fx.png2), &p(&fx.pdf)]);
     for out in [&fx.mp4, &fx.mp4b] {
@@ -160,11 +161,12 @@ fn params_for(id: &str) -> &'static [(&'static str, &'static str)] {
     }
 }
 
-const OPTIONAL_BINS: &[&str] = &["chromium", "soffice"];
+// Bundled in releases but not necessarily installed on a dev machine (CI has them vendored).
+const OPTIONAL_BINS: &[&str] = &["chromium", "soffice", "waifu2x-ncnn-vulkan", "pandoc", "typst"];
 
 /// Optional installs, the network, and tools that move files or need a previous output.
 const NOT_IN_LOOP: &[&str] = &[
-    "pdf-studio", "img-remove-bg", "img-ai-upscale", "vid-transcribe", "vid-download",
+    "pdf-studio", "img-remove-bg", "vid-transcribe", "vid-download",
     "batch-rename", "file-sort", "file-dates", "pdf-unlock", "arc-extract",
 ];
 

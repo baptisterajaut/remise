@@ -262,6 +262,23 @@ pub fn parse_areas(spec: &str) -> Result<Vec<[f64; 4]>, String> {
         .and_then(|v| if v.is_empty() { Err(bad()) } else { Ok(v) })
 }
 
+/// A font file ImageMagick can always open. Homebrew's ImageMagick has no usable default font,
+/// so text tools name one; falls back to the name of a font IM knows when none is found.
+pub fn system_font() -> String {
+    [
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoSans-Regular.ttf",
+    ]
+    .iter()
+    .find(|p| Path::new(p).is_file())
+    .map_or_else(|| "DejaVu-Sans".to_string(), |p| p.to_string())
+}
+
 /// A PostScript string literal.
 pub fn ps_str(s: &str) -> String {
     format!("({})", s.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)"))

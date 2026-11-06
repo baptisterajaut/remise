@@ -109,7 +109,7 @@ pub fn resolve(bin: &str, args: &[String]) -> Option<(PathBuf, Vec<String>)> {
         return None;
     }
     match args.first().map(String::as_str) {
-        Some("montage") => which("montage").map(|p| (p, args[1..].to_vec())),
+        Some(sub @ ("identify" | "montage" | "compare" | "composite" | "mogrify")) => which(sub).map(|p| (p, args[1..].to_vec())),
         _ => which("convert").map(|p| (p, args.to_vec())),
     }
 }

@@ -30,7 +30,7 @@ const PRODUCTS = {
   chromium: ["Chrome, Edge or Chromium", null],
   "yt-dlp": ["yt-dlp", "yt-dlp"],
   whisper: ["Whisper", null],
-  "realesrgan-ncnn-vulkan": ["Real-ESRGAN", null],
+  "waifu2x-ncnn-vulkan": ["waifu2x", null],
   soffice: ["LibreOffice", null],
   pandoc: ["Pandoc", "pandoc"],
   typst: ["Typst", "typst"],
@@ -42,7 +42,7 @@ const EXTRA_HINTS = {
   pdfcraft: "PdfCraft: github.com/storytold/pdfcraft",
   chromium: "Any of Google Chrome, Microsoft Edge or Chromium",
   soffice: "LibreOffice: libreoffice.org/download",
-  "realesrgan-ncnn-vulkan": "Real-ESRGAN: github.com/xinntao/Real-ESRGAN-ncnn-vulkan (unzip, keep models/ next to it)",
+  "waifu2x-ncnn-vulkan": "waifu2x: github.com/nihui/waifu2x-ncnn-vulkan (unzip, keep models-upconv_7_photo/ next to it)",
 };
 const product = (bin) => PRODUCTS[bin]?.[0] ?? bin;
 

@@ -245,6 +245,8 @@ pub static TOOLS: &[Tool] = &[
                     j.p("pos"),
                     "-pointsize",
                     j.p("size"),
+                    "-font",
+                    system_font(),
                     "-fill",
                     "rgba(255,255,255,0.6)",
                     "-stroke",
@@ -382,20 +384,10 @@ pub static TOOLS: &[Tool] = &[
             },
         ],
         output: Output::File { suffix: "redacted", ext: same },
+        // Absolute pixel coordinates from the measured size: ImageMagick 6 has no %[fx:] in -draw.
         build: |j| match parse_areas(j.p("areas")) {
             Err(e) => vec![Step::Fail(e)],
-            Ok(areas) => {
-                let draw: String = areas
-                    .iter()
-                    .map(|[x, y, w, h]| {
-                        format!("rectangle %[fx:w*{x}/100],%[fx:h*{y}/100] %[fx:w*{}/100],%[fx:h*{}/100] ", x + w, y + h)
-                    })
-                    .collect();
-                if j.p("mode") == "black" {
-                    return vec![magick(j, args!["-auto-orient", "-fill", "black", "-draw", draw])];
-                }
-                vec![measure(j, &j.input()), Step::Then(pixelate_plan)]
-            }
+            Ok(_) => vec![measure(j, &j.input()), Step::Then(redact_plan)],
         },
     },
     Tool {
@@ -494,23 +486,19 @@ pub static TOOLS: &[Tool] = &[
         id: "img-ai-upscale",
         family: Family::Image,
         name: "AI Upscale",
-        blurb: "Real-ESRGAN 4× on your GPU (optional install).",
-        bins: &["realesrgan-ncnn-vulkan"],
+        blurb: "waifu2x neural upscale for photos; GPU if there is one, CPU otherwise.",
+        bins: &["waifu2x-ncnn-vulkan"],
         accepts: &["png", "jpg", "jpeg", "webp"],
         inputs: Inputs::One,
-        params: &[Param::Select {
-            key: "model",
-            label: "Model",
-            options: &[("realesrgan-x4plus", "Photo"), ("realesrgan-x4plus-anime", "Illustration")],
-            default: "realesrgan-x4plus",
-        }],
-        output: Output::File { suffix: "ai4x", ext: |_| "png".into() },
-        // {bindir}: the models ship in a folder next to the binary.
+        params: &[Param::Select { key: "scale", label: "Factor", options: &[("2", "2×"), ("4", "4×")], default: "2" }],
+        output: Output::File { suffix: "ai", ext: |_| "png".into() },
+        // The model ships next to the binary ({bindir}). Default device first; if that wrote
+        // nothing (no usable Vulkan GPU), the same run on the CPU.
         build: |j| {
-            vec![Step::Run(
-                "realesrgan-ncnn-vulkan",
-                args!["-i", j.input(), "-o", j.out(), "-s", "4", "-n", j.p("model"), "-m", "{bindir}/models"],
-            )]
+            vec![
+                Step::Try(Box::new(Step::Run("waifu2x-ncnn-vulkan", waifu2x_args(j, None)))),
+                Step::Then(|j| Ok(if j.out.is_file() { vec![] } else { vec![Step::Run("waifu2x-ncnn-vulkan", waifu2x_args(j, Some("-1")))] })),
+            ]
         },
     },
     Tool {
@@ -528,6 +516,17 @@ pub static TOOLS: &[Tool] = &[
     },
 ];
 
+pub fn waifu2x_args(j: &Job, gpu: Option<&str>) -> Vec<String> {
+    let mut a = args![
+        "-i", j.input(), "-o", j.out(), "-s", j.p("scale"), "-n", "-1",
+        "-m", "{bindir}/models-upconv_7_photo", "-f", "png"
+    ];
+    if let Some(g) = gpu {
+        a.extend(args!["-g", g]);
+    }
+    a
+}
+
 /// `identify` the first frame's size into tmp/size.txt; read it back with `size_of`.
 fn measure(j: &Job, image: &str) -> Step {
     Step::Capture { bin: "magick", args: args!["identify", "-format", "%w %h", format!("{image}[0]")], into: j.tmp.join("size.txt") }
@@ -539,17 +538,21 @@ fn size_of(j: &Job) -> Result<(f64, f64), String> {
     it.next().zip(it.next()).ok_or_else(|| format!("unreadable image size `{text}`"))
 }
 
-/// Each area cut out, pixelated, and pasted back where it was.
-fn pixelate_plan(j: &Job) -> Result<Vec<Step>, String> {
+/// Each area blacked out, or cut out, pixelated and pasted back where it was.
+fn redact_plan(j: &Job) -> Result<Vec<Step>, String> {
     let (w, h) = size_of(j)?;
-    let mut a = args![j.input(), "-auto-orient"];
+    let mut a = args![j.input(), "-auto-orient", "-fill", "black"];
     for [x, y, aw, ah] in parse_areas(j.p("areas"))? {
         let (px, py) = ((w * x / 100.0).round(), (h * y / 100.0).round());
         let (pw, ph) = ((w * aw / 100.0).round().max(1.0), (h * ah / 100.0).round().max(1.0));
-        a.extend(args![
-            "(", "+clone", "-crop", format!("{pw}x{ph}+{px}+{py}"), "+repage", "-scale", "6%", "-scale", format!("{pw}x{ph}!"), ")",
-            "-geometry", format!("+{px}+{py}"), "-composite"
-        ]);
+        if j.p("mode") == "black" {
+            a.extend(args!["-draw", format!("rectangle {px},{py} {},{}", px + pw - 1.0, py + ph - 1.0)]);
+        } else {
+            a.extend(args![
+                "(", "+clone", "-crop", format!("{pw}x{ph}+{px}+{py}"), "+repage", "-scale", "6%", "-scale", format!("{pw}x{ph}!"), ")",
+                "-geometry", format!("+{px}+{py}"), "-composite"
+            ]);
+        }
     }
     a.push(j.out());
     Ok(vec![Step::Run("magick", a)])

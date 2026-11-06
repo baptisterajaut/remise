@@ -74,6 +74,24 @@ QJS = dict(name="QuickJS-NG", version="0.17.0", license="MIT",
 TESSDATA = "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0"
 
 
+WAIFU2X = dict(name="waifu2x-ncnn-vulkan", version="20250915", license="MIT (code and the upconv_7_photo model)",
+               source=f"{GH}/nihui/waifu2x-ncnn-vulkan/archive/refs/tags/20250915.tar.gz")
+
+
+def upscaler(os_name, sha):
+    """AI upscale with a CPU fallback (-g -1), unlike Real-ESRGAN-ncnn which needs a Vulkan GPU."""
+    exe = ".exe" if os_name == "windows" else ""
+    picks = [
+        (f"**/waifu2x-ncnn-vulkan{exe}", "waifu2x"),
+        ("**/models-upconv_7_photo/scale2.0x_model.*", "waifu2x/models-upconv_7_photo"),
+        ("?**/LICENSE", "licenses/waifu2x"),
+    ]
+    if exe:
+        picks.append(("**/vcomp140.dll", "waifu2x"))
+    asset = f"waifu2x-ncnn-vulkan-20250915-{os_name}.zip"
+    return [Item(**WAIFU2X, url=f"{GH}/nihui/waifu2x-ncnn-vulkan/releases/download/20250915/{asset}", sha256=sha, picks=picks)]
+
+
 def documents(pandoc, typst, ytdlp, qjs):
     """Pandoc + Typst (documents, Markdown → PDF) and yt-dlp + QuickJS (downloads), per platform.
     Each argument is (asset name, sha256)."""
@@ -156,7 +174,7 @@ PLATFORMS = {
         ("typst-x86_64-pc-windows-msvc.zip", "19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736"),
         ("yt-dlp.exe", "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555"),
         ("qjs-windows-x86_64.exe", "2aeabf0092c3262d6b2609824418f7dd7ed1f1df939f73b2b15645230cac0d77"),
-    ),
+    ) + upscaler("windows", "7425be94b94e4c8f37a1e433ac0e0100c43790e2c37418f4b65d8235adfbdc87"),
     # CBA: Ghostscript, Tesseract and ImageMagick have no relocatable macOS build upstream;
     # bundling them means brew + dylibbundler + inside-out re-signing per arch. Until then the
     # app greys those tools out with an install hint.
@@ -168,7 +186,7 @@ PLATFORMS = {
         ("typst-aarch64-apple-darwin.tar.xz", "48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a"),
         ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
         ("qjs-darwin-arm64", "8be3ddfe3397d2e692e4e1e8972ee9d032a0a580505d2f8b4ea528cf1b651c11"),
-    ),
+    ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42"),
     "macos-x64": macos("x64", "amd64/1789931006_9.0.2",
                        "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4",
                        "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481")
@@ -180,7 +198,7 @@ PLATFORMS = {
         ("typst-x86_64-apple-darwin.tar.xz", "7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa"),
         ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
         ("qjs-darwin-x86_64", "9e5e101b4fd13cda3204222ca9f8be35412c41dcdef3745829633b7a67245412"),
-    ),
+    ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42"),
     # AppImage. BtbN keeps month-end autobuilds, so this tag doesn't vanish like the dailies.
     "linux-x64": [
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
@@ -201,7 +219,7 @@ PLATFORMS = {
         ("typst-x86_64-unknown-linux-musl.tar.xz", "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c"),
         ("yt-dlp_linux", "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f"),
         ("qjs-linux-x86_64", "0bfc02511a9f549c28b53880d988fc7cd5d361e90c5e8afdfcd7dc6774ceace5"),
-    ),
+    ) + upscaler("linux", "848e0fba55657d34da90b775b8139e9806dc754798b029f95e106ba8850a731f"),
 }
 
 
