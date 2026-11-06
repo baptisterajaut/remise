@@ -15,4 +15,8 @@ export default [
       eqeqeq: ["error", "smart"],
     },
   },
+  {
+    files: ["tests/**/*.mjs", "eslint.config.js"],
+    languageOptions: { ecmaVersion: 2024, sourceType: "module", globals: { ...globals.node, ...globals.browser } },
+  },
 ];
