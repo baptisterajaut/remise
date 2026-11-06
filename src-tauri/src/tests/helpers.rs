@@ -135,9 +135,8 @@ fn pandoc_typesets_pdf_with_typst_and_keeps_markdown_images_relative() {
         };
         (t.build)(&j)
     };
-    let Step::Run("pandoc", a) = &pdf[0] else { panic!("{pdf:?}") };
+    let Step::Run("pandoc", a) = &pdf[1] else { panic!("{pdf:?}") };
     assert!(a.contains(&"--pdf-engine=typst".to_string()));
-    assert!(a.contains(&format!("--resource-path={}", tools::s(std::path::Path::new("/d/notes")))));
 
     let md = job("doc-to-markdown", &["/d/a.docx"], &[]);
     let Step::RunIn(dir, "pandoc", a) = &md[0] else { panic!("{md:?}") };
@@ -146,16 +145,14 @@ fn pandoc_typesets_pdf_with_typst_and_keeps_markdown_images_relative() {
 }
 
 #[test]
-fn risky_inputs_are_sandboxed_but_markdown_keeps_its_images() {
-    let html = job("doc-convert", &["/d/page.html"], &[]);
-    let Step::Run("pandoc", a) = &html[0] else { panic!("{html:?}") };
-    assert!(a.contains(&"--sandbox".to_string()));
-    let md = job("doc-md-docx", &["/d/notes.md"], &[]);
-    let Step::Run("pandoc", a) = &md[0] else { panic!("{md:?}") };
-    assert!(!a.contains(&"--sandbox".to_string()));
-    let epub = job("pdf-ebook", &["/d/book.epub"], &[]);
-    let Step::Run("pandoc", a) = &epub[0] else { panic!("{epub:?}") };
-    assert!(a.contains(&"--sandbox".to_string()));
+fn every_pandoc_run_is_sandboxed_with_the_image_filter() {
+    for (id, input) in [("doc-convert", "/d/page.html"), ("doc-md-docx", "/d/notes.md"), ("doc-md-pdf", "/d/notes.md"), ("pdf-ebook", "/d/book.epub")] {
+        let steps = job(id, &[input], &[]);
+        let [Step::Write(filter, lua), Step::Run("pandoc", a)] = &steps[..] else { panic!("{id}: {steps:?}") };
+        assert!(lua.contains("mediabag"), "{id}");
+        assert!(a.contains(&"--sandbox".to_string()), "{id}");
+        assert!(a.contains(&format!("--lua-filter={}", tools::s(filter))), "{id}");
+    }
 }
 
 #[test]

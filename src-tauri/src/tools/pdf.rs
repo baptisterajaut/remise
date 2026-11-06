@@ -551,7 +551,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "book", ext: |_| "pdf".into() },
-        build: |j| vec![super::docs::pandoc(j, args![])],
+        build: |j| super::docs::pandoc(j, args![]),
     },
     Tool {
         id: "pdf-html",

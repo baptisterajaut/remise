@@ -8,21 +8,18 @@ const DOCS: &[&str] = &["docx", "odt", "md", "markdown", "html", "htm", "epub", 
 const MARKDOWN: &[&str] = &["md", "markdown"];
 
 /// `pandoc <input> <extra…> -o <out>`; Typst does the PDF typesetting.
-/// Anything but the user's own Markdown runs in `--sandbox`: an HTML `<img src=/abs/path>`,
-/// a LaTeX `\input` or an RST include would otherwise pull local files into the output.
-pub fn pandoc(j: &Job, extra: Vec<String>) -> Step {
-    // Images in a Markdown file are relative to the file, not to wherever we run from.
-    let dir = j.inputs[0].parent().map(s).unwrap_or_default();
-    let mut a = args![j.input(), format!("--resource-path={dir}")];
-    if !MARKDOWN.contains(&j.in_ext().as_str()) {
-        a.push("--sandbox".into());
-    }
+/// Always in `--sandbox`: an HTML `<img src=/abs/path>`, a LaTeX `\input`, an RST include or a
+/// YAML `css:` would otherwise pull local files into the output. `safe-images.lua` then lets the
+/// document's own images back in (see the filter for what counts as its own).
+pub fn pandoc(j: &Job, extra: Vec<String>) -> Vec<Step> {
+    let filter = j.tmp.join("safe-images.lua");
+    let mut a = args![j.input(), "--sandbox", format!("--lua-filter={}", s(&filter))];
     a.extend(extra);
     if j.out.extension().is_some_and(|e| e == "pdf") {
         a.extend(args!["--pdf-engine=typst"]);
     }
     a.extend(args!["--standalone", "-o", j.out()]);
-    Step::Run("pandoc", a)
+    vec![Step::Write(filter, include_str!("safe-images.lua").into()), Step::Run("pandoc", a)]
 }
 
 /// Page setup for Typst PDFs.
@@ -75,7 +72,7 @@ pub static TOOLS: &[Tool] = &[
                 "html" => args!["--embed-resources"],
                 _ => args![],
             };
-            vec![pandoc(j, extra)]
+            pandoc(j, extra)
         },
     },
     Tool {
@@ -107,7 +104,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: PAGE,
         output: Output::File { suffix: "typeset", ext: |_| "pdf".into() },
-        build: |j| vec![pandoc(j, page_vars(j))],
+        build: |j| pandoc(j, page_vars(j)),
     },
     Tool {
         id: "doc-md-docx",
@@ -119,7 +116,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "doc", ext: |_| "docx".into() },
-        build: |j| vec![pandoc(j, args![])],
+        build: |j| pandoc(j, args![]),
     },
     Tool {
         id: "doc-md-slides",
@@ -131,7 +128,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "slides", ext: |_| "pptx".into() },
-        build: |j| vec![pandoc(j, args![])],
+        build: |j| pandoc(j, args![]),
     },
     Tool {
         id: "doc-pdf-ebook",
@@ -154,7 +151,7 @@ pub static TOOLS: &[Tool] = &[
                     let md = j.tmp.join("book.md");
                     Ok(vec![
                         Step::Write(md.clone(), super::pdf::to_markdown(&j.stem(), &super::pdf::text_pages(j)?)),
-                        Step::Run("pandoc", args![s(&md), "--metadata", format!("title={}", j.stem()), "-o", j.out()]),
+                        Step::Run("pandoc", args![s(&md), "--sandbox", "--metadata", format!("title={}", j.stem()), "-o", j.out()]),
                     ])
                 }),
             ]
