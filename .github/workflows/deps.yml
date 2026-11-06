@@ -21,6 +21,7 @@ jobs:
           - { os: macos-15, target: macos-arm64 }
           - { os: macos-15-intel, target: macos-x64 }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: bash scripts/build-deps.sh ${{ matrix.target }}
