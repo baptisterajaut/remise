@@ -74,6 +74,17 @@ potrace() {
     cd "$root"
 }
 
+# dylibbundler adds the same LC_RPATH twice to libraries that already used @rpath (libheif), and
+# dyld refuses to load a file with a duplicate one.
+dedupe_rpaths() {
+    local f dup
+    for f in "$@"; do
+        while dup=$(otool -l "$f" | awk '/LC_RPATH/ { getline; getline; print $2 }' | sort | uniq -d | head -1) && [[ -n $dup ]]; do
+            install_name_tool -delete_rpath "$dup" "$f"
+        done
+    done
+}
+
 # ImageMagick without modules (every coder built in) against Homebrew's delegate libraries, which
 # dylibbundler then copies next to it and rewrites to @executable_path/lib. Linux uses the
 # official AppImage instead, Windows the official portable build.
@@ -95,6 +106,7 @@ imagemagick() {
         "$dest/config/"
     cp LICENSE NOTICE "$dest/"
     dylibbundler -od -b -cd -x "$dest/magick" -d "$dest/lib" -p @executable_path/lib/ >/dev/null
+    dedupe_rpaths "$dest/magick" "$dest"/lib/*.dylib
     # install_name_tool voids the signatures; Apple Silicon refuses to run unsigned code.
     codesign -f -s - "$dest/magick" "$dest"/lib/*.dylib
     "$dest/magick" -version
