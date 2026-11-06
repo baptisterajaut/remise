@@ -1,0 +1,40 @@
+name: Deps
+
+# Builds what upstream ships no relocatable binary of (scripts/build-deps.sh). A push only builds
+# and keeps the artifacts; a manual run also attaches them to the "deps" pre-release, never
+# replacing an existing asset, so the SHA-256 pinned in vendor.py stays valid.
+on:
+  push:
+    paths: [scripts/build-deps.sh, .github/workflows/deps.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, target: linux-x64 }
+          - { os: macos-15, target: macos-arm64 }
+          - { os: macos-15-intel, target: macos-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash scripts/build-deps.sh ${{ matrix.target }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deps-${{ matrix.target }}
+          path: deps-out/*.tar.xz
+      - name: Publish
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The three jobs race to create it; whoever loses finds it there.
+          gh release view deps >/dev/null 2>&1 || gh release create deps --prerelease --title "Build dependencies" \
+            --notes "Programs built from source by .github/workflows/deps.yml for the installers. Not an app release." \
+            || gh release view deps >/dev/null
+          gh release upload deps deps-out/*.tar.xz
