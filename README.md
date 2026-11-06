@@ -52,6 +52,8 @@ xattr -dr com.apple.quarantine /Applications/Remise.app
 
 It runs on Ubuntu 22.04 or newer, Debian 12, Fedora 36 and other distributions of that age or newer.
 
+If it doesn't start, your system may lack FUSE 2, which AppImages use: `sudo apt install libfuse2` (on Ubuntu 24.04: `libfuse2t64`), `sudo dnf install fuse-libs` on Fedora.
+
 ## How to use it
 
 1. **Drop files on the window**, or pick a tool first. When you drop files on the main screen, Remise shows only the tools that can use them.
