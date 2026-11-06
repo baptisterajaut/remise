@@ -150,6 +150,8 @@ fn params_for(id: &str) -> &'static [(&'static str, &'static str)] {
     }
 }
 
+const OPTIONAL_BINS: &[&str] = &["chromium", "soffice"];
+
 /// Optional installs, the network, and tools that move files or need a previous output.
 const NOT_IN_LOOP: &[&str] = &[
     "pdf-studio", "img-remove-bg", "img-ai-upscale", "vid-transcribe", "vid-download",
@@ -171,8 +173,9 @@ fn smoke_every_tool() {
         Err(e) => failures.push(format!("{tool}: {e}")),
     };
     for t in tools::all().filter(|t| !NOT_IN_LOOP.contains(&t.id)) {
-        if t.bins.contains(&"chromium") && !crate::bins::available("chromium") {
-            println!("skip {:20} (no Chromium/Chrome/Edge)", t.id);
+        // Browsers and LibreOffice are the user's, not bundled: test them where they exist.
+        if let Some(b) = t.bins.iter().find(|b| OPTIONAL_BINS.contains(b) && !crate::bins::available(b)) {
+            println!("skip {:20} (no {b} here)", t.id);
             continue;
         }
         match inputs_for(t, &fx) {
