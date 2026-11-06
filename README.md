@@ -4,7 +4,7 @@
 
 Everything happens **on your computer**. Nothing is uploaded, there's no account, and it works offline. Your original files are never changed: every result is saved as a new file next to the original.
 
-![Remise](docs/light-wall.png)
+![Remise: a photo dropped on the wall narrows it to the tools that take photos; a video being compressed](docs/hero.png)
 
 ## Download
 
@@ -74,10 +74,13 @@ A few more things to know:
 
 - **Many files at once.** Drop as many as you want; each one is processed in turn. Some tools (Merge PDFs, Join videos, Contact sheet…) combine everything you dropped into one result instead.
 - **Chains.** Under *Chains* you can line tools up, for example *Compress PDF → Grayscale → Optimize for web*, and run the whole thing in one go. Only the final file is kept.
+
+  ![Chains](docs/chains.png)
+
 - **Making something from scratch.** Tools such as *Gradient*, *QR code* or *Video downloader* don't need a file. Their results go to your **Downloads** folder.
 - **Search.** Press `/` to search for a tool by name.
 
-![A tool, ready to run](docs/light-bench.png)
+![Compressing three videos: one done, one at 64 %, one waiting](docs/bench.png)
 
 ## What's inside
 
@@ -115,6 +118,8 @@ A few tools use another free program that you install yourself. Until you do, th
 **Will it overwrite my files?** No. Results always get a new name. If that name is already taken, Remise adds `-2`, `-3` and so on.
 
 **A tool failed. What now?** The reason is shown under the file, in red. Most of the time the file isn't the kind the tool expects, or a setting has a typo (a page range, a time). If it looks like a bug, please [open an issue](https://github.com/baptisterajaut/remise/issues) and paste that message.
+
+**AI Upscale says "vkCreateInstance failed".** It needs an up-to-date graphics driver (any GPU from the last ten years has one). On Linux without a GPU, install your distribution's `mesa-vulkan-drivers` (or `vulkan-swrast`). Macs need nothing.
 
 **Why is a tool striped?** It needs a program that isn't installed on this computer. Hover over it to see which one, and how to get it.
 

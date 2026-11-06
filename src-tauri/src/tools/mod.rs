@@ -279,6 +279,17 @@ pub fn system_font() -> String {
     .map_or_else(|| "DejaVu-Sans".to_string(), |p| p.to_string())
 }
 
+/// `identify` the first frame's size into tmp/size.txt; read it back with `size_of`.
+pub fn measure(j: &Job, image: &str) -> Step {
+    Step::Capture { bin: "magick", args: args!["identify", "-format", "%w %h", format!("{image}[0]")], into: j.tmp.join("size.txt") }
+}
+
+pub fn size_of(j: &Job) -> Result<(f64, f64), String> {
+    let text = j.read_tmp("size.txt")?;
+    let mut it = text.split_whitespace().filter_map(|v| v.parse::<f64>().ok());
+    it.next().zip(it.next()).ok_or_else(|| format!("unreadable image size `{text}`"))
+}
+
 /// A PostScript string literal.
 pub fn ps_str(s: &str) -> String {
     format!("({})", s.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)"))

@@ -71,7 +71,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
-            ghostscript tesseract-ocr imagemagick
+            ghostscript tesseract-ocr imagemagick mesa-vulkan-drivers
           # Ubuntu's ImageMagick 6 policy forbids writing PDF; the fixtures need it.
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
           # Chrome's sandbox needs unprivileged user namespaces, which 24.04's AppArmor blocks.
@@ -92,3 +92,6 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml -- --ignored smoke --nocapture
         env:
           REMISE_VENDOR: ${{ github.workspace }}/vendor
+          # waifu2x needs a Vulkan driver; Linux gets Mesa's CPU one (lavapipe) above, the
+          # Windows runner has no driver at all.
+          REMISE_SMOKE_SKIP: ${{ runner.os == 'Windows' && 'img-ai-upscale' || '' }}

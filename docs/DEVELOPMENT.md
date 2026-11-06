@@ -67,3 +67,4 @@ These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):
 - **Stamp** uses light tints instead of transparency, because `.setfillconstantalpha` errors out in Ghostscript 10.08.
 - **Sign** expects A4 pages, and the signature drifts a little on other page sizes.
 - **PDF to Ebook** keeps the text only.
+- **AI Upscale** (waifu2x) needs a Vulkan graphics driver. Every recent GPU driver has one, and on Linux Mesa provides one even without a GPU (lavapipe). It works out of the box on Macs.

@@ -527,17 +527,6 @@ pub fn waifu2x_args(j: &Job, gpu: Option<&str>) -> Vec<String> {
     a
 }
 
-/// `identify` the first frame's size into tmp/size.txt; read it back with `size_of`.
-fn measure(j: &Job, image: &str) -> Step {
-    Step::Capture { bin: "magick", args: args!["identify", "-format", "%w %h", format!("{image}[0]")], into: j.tmp.join("size.txt") }
-}
-
-fn size_of(j: &Job) -> Result<(f64, f64), String> {
-    let text = j.read_tmp("size.txt")?;
-    let mut it = text.split_whitespace().filter_map(|v| v.parse::<f64>().ok());
-    it.next().zip(it.next()).ok_or_else(|| format!("unreadable image size `{text}`"))
-}
-
 /// Each area blacked out, or cut out, pixelated and pasted back where it was.
 fn redact_plan(j: &Job) -> Result<Vec<Step>, String> {
     let (w, h) = size_of(j)?;

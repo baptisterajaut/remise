@@ -184,7 +184,13 @@ fn smoke_every_tool() {
         }
         Err(e) => failures.push(format!("{tool}: {e}")),
     };
+    // REMISE_SMOKE_SKIP=id,id: what a given CI machine can't run (no GPU driver…).
+    let skip = std::env::var("REMISE_SMOKE_SKIP").unwrap_or_default();
     for t in tools::all().filter(|t| !NOT_IN_LOOP.contains(&t.id)) {
+        if skip.split(',').any(|s| s == t.id) {
+            println!("skip {:20} (REMISE_SMOKE_SKIP)", t.id);
+            continue;
+        }
         // Browsers and LibreOffice are the user's, not bundled: test them where they exist.
         if let Some(b) = t.bins.iter().find(|b| OPTIONAL_BINS.contains(b) && !crate::bins::available(b)) {
             println!("skip {:20} (no {b} here)", t.id);

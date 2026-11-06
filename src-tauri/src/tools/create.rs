@@ -87,18 +87,8 @@ pub static TOOLS: &[Tool] = &[
             default: "#ff9a8b #a18cd1",
         }],
         output: Output::File { suffix: "beautified", ext: |_| "png".into() },
-        build: |j| {
-            let (c1, c2) = j.p("colors").split_once(' ').unwrap_or(("#ff9a8b", "#a18cd1"));
-            let mut a = args![j.input(), "-auto-orient"];
-            a.extend(rounded(24));
-            a.extend(shadow(45));
-            a.extend(args![
-                "-gravity", "center", "-extent", "%[fx:w+180]x%[fx:h+180]",
-                "(", "+clone", "-sparse-color", "Barycentric", format!("0,0 {c1} %[w],%[h] {c2}"), ")",
-                "+swap", "-compose", "over", "-composite", j.out()
-            ]);
-            vec![Step::Run("magick", a)]
-        },
+        // Sizes measured first: ImageMagick 6 (Ubuntu, Debian) has no %[fx:] in -extent.
+        build: |j| vec![measure(j, &j.input()), Step::Then(beautify_plan)],
     },
     Tool {
         id: "create-html-image",
@@ -248,18 +238,7 @@ pub static TOOLS: &[Tool] = &[
             default: "1080x1350",
         }],
         output: Output::Dir("carousel"),
-        build: |j| {
-            let tile = j.p("tile");
-            let (w, h) = tile.split_once('x').unwrap_or(("1080", "1350"));
-            vec![magick_to(
-                j,
-                args![
-                    "-auto-orient", "-resize", format!("x{h}"), "-background", "white", "-gravity", "west",
-                    "-extent", format!("%[fx:ceil(w/{w})*{w}]x{h}"), "-crop", tile, "+repage", "+adjoin"
-                ],
-                j.out_pattern("-%02d.png"),
-            )]
-        },
+        build: |j| vec![measure(j, &j.input()), Step::Then(carousel_plan)],
     },
     Tool {
         id: "create-qr",
@@ -287,6 +266,35 @@ pub static TOOLS: &[Tool] = &[
         },
     },
 ];
+
+/// Rounded, shadowed shot centred on a diagonal gradient 180 px bigger than the shot.
+fn beautify_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let (w, h) = size_of(j)?;
+    let (c1, c2) = j.p("colors").split_once(' ').unwrap_or(("#ff9a8b", "#a18cd1"));
+    let mut a = args!["-size", format!("{}x{}", w + 180.0, h + 180.0), "-define", "gradient:angle=135", format!("gradient:{c1}-{c2}")];
+    a.extend(args!["(", j.input(), "-auto-orient"]);
+    a.extend(rounded(24));
+    a.extend(shadow(45));
+    a.extend(args![")", "-gravity", "center", "-composite", j.out()]);
+    Ok(vec![Step::Run("magick", a)])
+}
+
+/// Scaled to the post height, padded to a whole number of posts, cut into posts.
+fn carousel_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let (w, h) = size_of(j)?;
+    let tile = j.p("tile");
+    let (tw, th) = tile.split_once('x').and_then(|(a, b)| Some((a.parse::<f64>().ok()?, b.parse::<f64>().ok()?))).ok_or("bad post size")?;
+    let scaled_w = (w * th / h).round();
+    let padded_w = (scaled_w / tw).ceil().max(1.0) * tw;
+    Ok(vec![magick_to(
+        j,
+        args![
+            "-auto-orient", "-resize", format!("x{th}"), "-background", "white", "-gravity", "west",
+            "-extent", format!("{padded_w}x{th}"), "-crop", tile, "+repage", "+adjoin"
+        ],
+        j.out_pattern("-%02d.png"),
+    )])
+}
 
 pub fn qr_svg(text: &str) -> Result<String, String> {
     if text.is_empty() {
