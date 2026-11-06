@@ -182,6 +182,13 @@ fn capture(bin: &str, args: &[String], into: &Path) -> Result<(), String> {
     fs::write(into, &out.stdout).map_err(|e| e.to_string())
 }
 
+/// ffmpeg exits non-zero without an output file; the summary on stderr is all we want.
+fn probe(input: &Path, into: &Path) -> Result<(), String> {
+    let path = which("ffmpeg").ok_or("ffmpeg is not installed")?;
+    let out = command(&path).args(["-hide_banner", "-i"]).arg(input).stdin(Stdio::null()).output().map_err(|e| format!("ffmpeg: {e}"))?;
+    fs::write(into, &out.stderr).map_err(|e| e.to_string())
+}
+
 fn touch(path: &Path, when: std::time::SystemTime) -> Result<(), String> {
     let f = fs::File::options().write(true).open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     f.set_modified(when).map_err(|e| format!("{}: {e}", path.display()))
@@ -202,6 +209,7 @@ fn run_step(emit: Emit, p: &Progress, job: &Job, step: Step, produced: &mut Vec<
         Step::Run(bin, args) => exec(emit, p, bin, &args, None),
         Step::RunIn(dir, bin, args) => exec(emit, p, bin, &args, Some(&dir)),
         Step::Capture { bin, args, into } => capture(bin, &args, &into),
+        Step::Probe(input, into) => probe(&input, &into),
         Step::Then(next) => next(job)?.into_iter().try_for_each(|s| run_step(emit, p, job, s, produced)),
         Step::Fail(msg) => Err(msg),
         Step::Try(step) => {

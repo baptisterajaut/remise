@@ -86,6 +86,12 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: python scripts/vendor.py ${{ matrix.vendor }}
+      # The first-use downloads (~1 GB per OS). fetch.rs pins every URL and SHA-256, so the key
+      # changes exactly when a download does; Remise skips what is already in place.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/user-tools
+          key: user-tools-${{ matrix.vendor }}-${{ hashFiles('src-tauri/src/fetch.rs') }}
       # The app itself: background removal runs it as a helper (`remise --cutout`).
       - run: cargo build --manifest-path src-tauri/Cargo.toml
       - run: cargo test --manifest-path src-tauri/Cargo.toml -- --ignored smoke --nocapture

@@ -190,24 +190,13 @@ pub static TOOLS: &[Tool] = &[
         id: "vid-join",
         family: Family::Video,
         name: "Join videos",
-        blurb: "Back to back, no re-encode (same camera/settings).",
+        blurb: "Back to back: as they are when they match, fitted to the first clip when they don't.",
         bins: &["ffmpeg"],
         accepts: VID,
         inputs: Inputs::Many,
         params: &[],
         output: Output::File { suffix: "joined", ext: same },
-        // CBA: concat demuxer + stream copy, needs matching codecs; concat filter with re-encode if mixed sources matter
-        build: |j| {
-            let list = j.tmp.join("list.txt");
-            let body: String = j.inputs.iter().map(|p| format!("file '{}'\n", s(p).replace('\'', "'\\''"))).collect();
-            vec![
-                Step::Write(list.clone(), body),
-                Step::Run(
-                    "ffmpeg",
-                    args!["-hide_banner", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", s(&list), "-c", "copy", j.out()],
-                ),
-            ]
-        },
+        build: |j| media::probe_then(j, join_plan),
     },
     Tool {
         id: "vid-frames",
@@ -434,48 +423,9 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::Many,
         params: &[Param::Text { key: "at", label: "Insert at (seconds)", default: "5", placeholder: "12.5" }],
         output: Output::File { suffix: "inserted", ext: |_| "mp4".into() },
-        // CBA: both clips need an audio track, and the clip is forced to 25 fps to match
-        build: |j| {
-            let [main, clip] = &j.inputs[..] else {
-                return vec![Step::Fail("drop the main video, then one clip".into())];
-            };
-            let Ok(at) = j.p("at").trim().parse::<f64>() else {
-                return vec![Step::Fail("the insert time is a number of seconds".into())];
-            };
-            let fc = format!(
-                "[0:v]split=3[m1][m2][mr];[0:a]asplit[a1][a2];\
-                 [m1]trim=0:{at},setpts=PTS-STARTPTS,setsar=1[v0];[a1]atrim=0:{at},asetpts=PTS-STARTPTS[x0];\
-                 [m2]trim=start={at},setpts=PTS-STARTPTS,setsar=1[v2];[a2]atrim=start={at},asetpts=PTS-STARTPTS[x2];\
-                 [1:v][mr]scale=rw:rh,setsar=1,fps=25[v1];[1:a]aresample=48000[x1];\
-                 [v0][x0][v1][x1][v2][x2]concat=n=3:v=1:a=1[v][a]"
-            );
-            vec![Step::Run(
-                "ffmpeg",
-                args![
-                    "-hide_banner",
-                    "-nostdin",
-                    "-y",
-                    "-i",
-                    s(main),
-                    "-i",
-                    s(clip),
-                    "-filter_complex",
-                    fc,
-                    "-map",
-                    "[v]",
-                    "-map",
-                    "[a]",
-                    "-c:v",
-                    "libx264",
-                    "-crf",
-                    "20",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-c:a",
-                    "aac",
-                    j.out()
-                ],
-            )]
+        build: |j| match insert_at(j) {
+            Err(e) => vec![Step::Fail(e)],
+            Ok(_) => media::probe_then(j, insert_plan),
         },
     },
     Tool {
@@ -584,4 +534,80 @@ pub fn segment(j: &Job) -> Step {
             j.out_pattern(&format!("-%03d.{}", j.in_ext()))
         ],
     )
+}
+
+/// Same codecs, size and sound everywhere: the concat demuxer copies the streams, lossless and
+/// instant. Otherwise every clip is fitted (letterboxed) to the first one's size and frame rate,
+/// with silence for clips that have no sound, and re-encoded.
+fn join_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let clips = media::probed(j)?;
+    if clips.iter().all(|m| m.signature() == clips[0].signature()) {
+        let list = j.tmp.join("list.txt");
+        let body: String = j.inputs.iter().map(|p| format!("file '{}'\n", s(p).replace('\'', "'\\''"))).collect();
+        let copy = args!["-hide_banner", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", s(&list), "-c", "copy", j.out()];
+        return Ok(vec![Step::Write(list, body), Step::Run("ffmpeg", copy)]);
+    }
+    let (_, w, h, fps) = clips[0].video.clone().ok_or_else(|| format!("{} has no picture", j.input()))?;
+    let fit =
+        format!("scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={}", fps.unwrap_or(30.0));
+    let mut inputs: Vec<String> = j.inputs.iter().flat_map(|p| args!["-i", s(p)]).collect();
+    let (mut fc, mut cat) = (String::new(), String::new());
+    for (i, clip) in clips.iter().enumerate() {
+        let a = sound(&mut inputs, clip, i, &j.inputs[i])?;
+        fc += &format!("[{i}:v]{fit},format=yuv420p[v{i}];[{a}]aresample=48000,aformat=channel_layouts=stereo[a{i}];");
+        cat += &format!("[v{i}][a{i}]");
+    }
+    fc += &format!("{cat}concat=n={}:v=1:a=1[v][a]", clips.len());
+    Ok(vec![Step::Run("ffmpeg", encode(j, inputs, fc))])
+}
+
+/// Splices the second clip into the first at `at` seconds; a side without sound gets silence,
+/// and the clip takes the main video's size and frame rate.
+fn insert_plan(j: &Job) -> Result<Vec<Step>, String> {
+    let at = insert_at(j)?;
+    let clips = media::probed(j)?;
+    let fps = clips[0].video.as_ref().and_then(|v| v.3).unwrap_or(25.0);
+    let mut inputs: Vec<String> = j.inputs.iter().flat_map(|p| args!["-i", s(p)]).collect();
+    let main_a = sound(&mut inputs, &clips[0], 0, &j.inputs[0])?;
+    let clip_a = sound(&mut inputs, &clips[1], 1, &j.inputs[1])?;
+    let fc = format!(
+        "[0:v]split=3[m1][m2][mr];[{main_a}]asplit[a1][a2];\
+         [m1]trim=0:{at},setpts=PTS-STARTPTS,setsar=1[v0];[a1]atrim=0:{at},asetpts=PTS-STARTPTS[x0];\
+         [m2]trim=start={at},setpts=PTS-STARTPTS,setsar=1[v2];[a2]atrim=start={at},asetpts=PTS-STARTPTS[x2];\
+         [1:v][mr]scale=rw:rh,setsar=1,fps={fps}[v1];[{clip_a}]aresample=48000[x1];\
+         [v0][x0][v1][x1][v2][x2]concat=n=3:v=1:a=1[v][a]"
+    );
+    Ok(vec![Step::Run("ffmpeg", encode(j, inputs, fc))])
+}
+
+fn insert_at(j: &Job) -> Result<f64, String> {
+    if j.inputs.len() != 2 {
+        return Err("drop the main video, then one clip".into());
+    }
+    j.p("at").trim().parse::<f64>().map_err(|_| "the insert time is a number of seconds".into())
+}
+
+/// The audio stream for input `i`: its own, or silence as long as it, added as a new input.
+fn sound(inputs: &mut Vec<String>, clip: &media::Media, i: usize, path: &Path) -> Result<String, String> {
+    if clip.audio.is_some() {
+        return Ok(format!("{i}:a"));
+    }
+    let secs = clip.duration.ok_or_else(|| format!("can't tell how long {} is", path.display()))?;
+    let n = inputs.iter().filter(|a| *a == "-i").count();
+    inputs.extend(media::silence(secs));
+    Ok(format!("{n}:a"))
+}
+
+/// Re-encode `[v]` and `[a]`: VP9/Opus into WebM, H.264/AAC into anything else.
+fn encode(j: &Job, inputs: Vec<String>, fc: String) -> Vec<String> {
+    let mut a = args!["-hide_banner", "-nostdin", "-y"];
+    a.extend(inputs);
+    a.extend(args!["-filter_complex", fc, "-map", "[v]", "-map", "[a]"]);
+    if ext_of(&j.out) == "webm" {
+        a.extend(args!["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus"]);
+    } else {
+        a.extend(args!["-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac"]);
+    }
+    a.push(j.out());
+    a
 }

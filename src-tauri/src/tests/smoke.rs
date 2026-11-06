@@ -335,6 +335,25 @@ fn smoke_downloads_then_use_them() {
     let _ = fs::remove_dir_all(&fx.dir);
 }
 
+/// Clips that differ in size, frame rate and sound still join, and splice into each other.
+#[test]
+#[ignore]
+fn smoke_mixed_clips_join_and_insert() {
+    let fx = fixtures("mixed");
+    let silent = fx.dir.join("silent.mp4");
+    sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "testsrc=s=640x360:d=2:r=30", "-pix_fmt", "yuv420p", &tools::s(&silent)]);
+    let joined = go("vid-join", &[&fx.mp4, &silent], &[], &fx.dir).unwrap();
+    let inserted = go("vid-insert", &[&fx.mp4, &silent], &[("at", "1")], &fx.dir).unwrap();
+    for out in [&joined[0], &inserted[0]] {
+        let (ffmpeg, _) = resolve("ffmpeg", &[]).unwrap();
+        let info = command(&ffmpeg).args(["-hide_banner", "-i", out]).output().unwrap().stderr;
+        let m = tools::media::parse(&String::from_utf8_lossy(&info));
+        assert_eq!(m.video.as_ref().map(|v| (v.1, v.2)), Some((320, 240)), "{out}: the first clip's size");
+        assert!(m.audio.is_some() && m.duration.is_some_and(|d| d > 4.5), "{out}: sound throughout, {m:?}");
+    }
+    let _ = fs::remove_dir_all(&fx.dir);
+}
+
 /// Stop kills the program mid-way and leaves nothing next to the input.
 #[test]
 #[ignore]

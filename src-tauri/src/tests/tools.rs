@@ -101,13 +101,60 @@ fn frame_pattern_escapes_path_percent_but_not_counter() {
     assert_eq!(*a.last().unwrap(), format!("{dir}-%04d.jpg"));
 }
 
+const WITH_SOUND: &str = "  Duration: 00:00:02.00, start: 0.000000, bitrate: 127 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 320x240 [SAR 1:1 DAR 4:3], 45 kb/s, 25 fps, 25 tbr, 12800 tbn (default)
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 69 kb/s (default)";
+const SILENT: &str = "  Duration: 00:00:01.00, start: 0.000000, bitrate: 91 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 640x360 [SAR 1:1 DAR 16:9], 81 kb/s, 30 fps, 30 tbr, 15360 tbn (default)";
+
 #[test]
-fn join_quotes_single_quotes_in_concat_list() {
-    let steps = job("vid-join", &["/v/it's.mp4", "/v/b.mp4"], "/v/it's.joined.mp4", &[]);
-    match &steps[0] {
-        Step::Write(_, body) => assert_eq!(body, "file '/v/it'\\''s.mp4'\nfile '/v/b.mp4'\n"),
-        other => panic!("{other:?}"),
+fn ffmpeg_summary_is_read() {
+    let m = crate::tools::media::parse(WITH_SOUND);
+    assert_eq!(m.video, Some(("h264".into(), 320, 240, Some(25.0))));
+    assert_eq!(m.audio, Some(("aac".into(), "44100 Hz".into(), "mono".into())));
+    assert_eq!(m.duration, Some(2.0));
+    assert_eq!(crate::tools::media::parse(SILENT).audio, None);
+}
+
+/// Runs a probing tool's plan against summaries written where its probes would have put them.
+fn plan_after_probes(id: &str, inputs: &[&str], probes: &[&str]) -> Vec<Step> {
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = std::env::temp_dir().join(format!("remise-plan-{id}-{}-{n}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    for (i, text) in probes.iter().enumerate() {
+        std::fs::write(tmp.join(format!("probe-{i}.txt")), text).unwrap();
     }
+    let t = find(id).unwrap();
+    let j = Job {
+        inputs: inputs.iter().map(PathBuf::from).collect(),
+        out: PathBuf::from("/v/out.mp4"),
+        tmp: tmp.clone(),
+        params: with_defaults(t, Default::default()),
+    };
+    let steps = (t.build)(&j);
+    let Some(Step::Then(plan)) = steps.last() else { panic!("{steps:?}") };
+    let next = plan(&j).unwrap();
+    let _ = std::fs::remove_dir_all(&tmp);
+    next
+}
+
+#[test]
+fn matching_clips_join_losslessly_with_quoted_names() {
+    let steps = plan_after_probes("vid-join", &["/v/it's.mp4", "/v/b.mp4"], &[WITH_SOUND, WITH_SOUND]);
+    let Step::Write(_, body) = &steps[0] else { panic!("{steps:?}") };
+    assert_eq!(body, "file '/v/it'\\''s.mp4'\nfile '/v/b.mp4'\n");
+    assert!(run_args(&steps[1]).1.contains(&"copy"));
+}
+
+#[test]
+fn mixed_clips_are_fitted_to_the_first_and_get_silence() {
+    let steps = plan_after_probes("vid-join", &["/v/a.mp4", "/v/b.mp4"], &[WITH_SOUND, SILENT]);
+    let (_, a) = run_args(&steps[0]);
+    let fc = a[a.iter().position(|x| *x == "-filter_complex").unwrap() + 1];
+    assert!(fc.contains("pad=320:240") && fc.contains("fps=25"), "{fc}");
+    assert!(a.contains(&"anullsrc=r=48000:cl=stereo") && fc.contains("[2:a]"), "the silent clip's sound is input 2: {fc}");
+    assert!(fc.ends_with("concat=n=2:v=1:a=1[v][a]"));
 }
 
 #[test]

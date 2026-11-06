@@ -38,7 +38,7 @@ Set `REMISE_VENDOR=$PWD/vendor` to make the app or the smoke test use a vendored
 
 ## CI and releases
 
-- **CI** runs lint and unit tests on Linux, Windows and macOS. It then runs the smoke test on Windows, Linux, and both kinds of Mac against the bundled binaries only, followed by the first-use downloads and the tools that use them.
+- **CI** runs lint and unit tests on Linux, Windows and macOS. It then runs the smoke test on Windows, Linux, and both kinds of Mac against the bundled binaries only, followed by the first-use downloads and the tools that use them. Those downloads are cached per OS under a key derived from `fetch.rs`, which holds every pinned URL and SHA-256: a changed pin downloads afresh, otherwise nothing is fetched again.
 - **Deps**: `.github/workflows/deps.yml` builds from pinned sources what has no relocatable upstream binary (`scripts/build-deps.sh`), checks that the result links nothing but the system's C/C++ runtime, and, when run by hand, attaches it to the `deps` pre-release. `vendor.py` then pins those files by SHA-256 like any other download; an asset is never replaced, so a pin can't go stale.
 - **Releases**: pushing a `v*` tag builds the four installers (Windows x64, macOS Apple Silicon and Intel, Linux AppImage) into a draft GitHub release.
 
@@ -78,8 +78,6 @@ Too big for every installer, so the tool's button offers the download, with its 
 These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):
 
 - **Builds**: they are unsigned.
-- **Join videos** copies streams without re-encoding, so the clips need matching codecs.
-- **Insert clip** needs both videos to have an audio track.
 - **Batch rename** has no live preview and no undo.
 - **Stop** kills the program a job is running, not the ones that program started itself (LibreOffice's `soffice.bin`, yt-dlp's FFmpeg).
 - **Change file dates** reads the date as UTC.

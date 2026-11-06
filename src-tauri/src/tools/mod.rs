@@ -81,6 +81,8 @@ pub enum Step {
     Rename(PathBuf, PathBuf),
     /// Start another app and don't wait for it.
     Launch(&'static str, Vec<String>),
+    /// `ffmpeg -i <input>`'s stream summary (its stderr) into a file, for `media::parse`.
+    Probe(PathBuf, PathBuf),
     /// Run and save stdout to a file, for a later `Then` to read.
     Capture {
         bin: &'static str,
@@ -218,6 +220,7 @@ pub mod create;
 pub mod docs;
 pub mod files;
 pub mod image;
+pub mod media;
 pub mod pdf;
 mod video;
 
