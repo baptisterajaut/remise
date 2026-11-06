@@ -155,7 +155,7 @@ pub static TOOLS: &[Tool] = &[
             default: "1440,900",
         }],
         output: Output::File { suffix: "shot", ext: |_| "png".into() },
-        build: |j| vec![chromium(j, j.input(), args![format!("--window-size={}", j.p("viewport")), format!("--screenshot={}", j.out())])],
+        build: |j| chromium(j, j.input(), args![format!("--window-size={}", j.p("viewport")), format!("--screenshot={}", j.out())]),
     },
     Tool {
         id: "create-gradient",
@@ -320,7 +320,7 @@ pub static TOOLS: &[Tool] = &[
         family: Family::Create,
         name: "QR code",
         blurb: "Text or a link as a crisp QR code.",
-        bins: &[],
+        bins: &["magick"],
         accepts: &[],
         inputs: Inputs::None,
         params: &[
@@ -328,16 +328,22 @@ pub static TOOLS: &[Tool] = &[
             Param::Select { key: "format", label: "As", options: &[("svg", "SVG"), ("png", "PNG")], default: "svg" },
         ],
         output: Output::File { suffix: "qr", ext: fmt },
+        // PNG from the module grid itself (a PBM, scaled up pixel for pixel), not by rasterising
+        // the SVG: ImageMagick's SVG renderer goes through MVG, which the hardened policy refuses.
         build: |j| {
-            let svg = match qr_svg(j.p("text")) {
-                Ok(svg) => svg,
-                Err(e) => return vec![Step::Fail(e)],
-            };
             if j.p("format") == "svg" {
-                return vec![Step::Write(j.out.clone(), svg)];
+                return match qr_svg(j.p("text")) {
+                    Ok(svg) => vec![Step::Write(j.out.clone(), svg)],
+                    Err(e) => vec![Step::Fail(e)],
+                };
             }
-            let tmp = j.tmp.join("qr.svg");
-            vec![Step::Write(tmp.clone(), svg), Step::Run("magick", args!["-density", "300", s(&tmp), j.out()])]
+            match qr_pbm(j.p("text")) {
+                Err(e) => vec![Step::Fail(e)],
+                Ok((pbm, scale)) => {
+                    let tmp = j.tmp.join("qr.pbm");
+                    vec![Step::Write(tmp.clone(), pbm), Step::Run("magick", args![s(&tmp), "-scale", format!("{scale}%"), j.out()])]
+                }
+            }
         },
     },
 ];
@@ -380,6 +386,26 @@ fn carousel_plan(j: &Job) -> Result<Vec<Step>, String> {
         ],
         j.out_pattern("-%02d.png"),
     )])
+}
+
+/// The code as a plain PBM, one pixel per module inside a 4-module quiet zone, and the scale
+/// (in %) that brings it to about 1024 px.
+pub fn qr_pbm(text: &str) -> Result<(String, u32), String> {
+    if text.is_empty() {
+        return Err("nothing to encode".into());
+    }
+    let code = qrcode::QrCode::new(text.as_bytes()).map_err(|e| format!("can't make a QR code: {e}"))?;
+    let (w, colors) = (code.width(), code.to_colors());
+    let side = w + 8;
+    let dark =
+        |x: usize, y: usize| (4..w + 4).contains(&x) && (4..w + 4).contains(&y) && colors[(y - 4) * w + x - 4] == qrcode::Color::Dark;
+    let mut pbm = format!("P1\n{side} {side}\n");
+    for y in 0..side {
+        let row: Vec<&str> = (0..side).map(|x| if dark(x, y) { "1" } else { "0" }).collect();
+        pbm.push_str(&row.join(" "));
+        pbm.push('\n');
+    }
+    Ok((pbm, (1024 / side as u32 + 1) * 100))
 }
 
 pub fn qr_svg(text: &str) -> Result<String, String> {

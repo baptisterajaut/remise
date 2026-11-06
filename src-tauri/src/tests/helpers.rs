@@ -211,3 +211,19 @@ fn renames_can_be_previewed_before_running() {
     let bad = Job { params: tools::with_defaults(t, [("pattern".to_string(), "../x".to_string())].into()), ..j };
     assert!(tools::planned_renames(&bad, (t.build)(&bad)).is_err(), "the refusal shows up in the preview");
 }
+
+#[test]
+fn qr_png_comes_from_the_module_grid() {
+    let (pbm, scale) = tools::create::qr_pbm("https://example.com").unwrap();
+    let mut lines = pbm.lines();
+    assert_eq!(lines.next(), Some("P1"));
+    let side: usize = lines.next().unwrap().split(' ').next().unwrap().parse().unwrap();
+    assert_eq!(lines.clone().count(), side);
+    assert!(lines.next().unwrap().split(' ').all(|px| px == "0"), "quiet zone on top");
+    assert!(side * scale as usize / 100 >= 1024);
+    if let Ok(dir) = std::env::var("REMISE_QR_OUT") {
+        let dir = PathBuf::from(dir);
+        std::fs::write(dir.join("qr.pbm"), &pbm).unwrap();
+        std::fs::write(dir.join("scale.txt"), scale.to_string()).unwrap();
+    }
+}

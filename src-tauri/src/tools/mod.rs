@@ -323,7 +323,9 @@ fn gs_overlay(j: &Job, device: &str, extra: &[&str], ps: &str) -> Step {
 }
 
 /// Headless Chromium/Chrome/Edge with a throwaway profile (a running browser keeps its own).
-fn chromium(j: &Job, input: String, mode: Vec<String>) -> Step {
+/// Chrome on macOS can write its file and still exit with an error from its teardown watchdog,
+/// so the result counts by the file, not the exit code.
+fn chromium(j: &Job, input: String, mode: Vec<String>) -> Vec<Step> {
     let mut a = args![
         "--headless",
         "--disable-gpu",
@@ -334,7 +336,10 @@ fn chromium(j: &Job, input: String, mode: Vec<String>) -> Step {
     ];
     a.extend(mode);
     a.push(input);
-    Step::Run("chromium", a)
+    vec![
+        Step::Try(Box::new(Step::Run("chromium", a))),
+        Step::Then(|j| if j.out.is_file() { Ok(vec![]) } else { Err("the browser wrote nothing; is it a web page (.html)?".into()) }),
+    ]
 }
 
 /// `YYYY-MM-DD` or `YYYY-MM-DD HH:MM`, read as UTC (the caller shifts it to local time).

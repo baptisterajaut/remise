@@ -10,6 +10,7 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStderr, ChildStdout, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -159,6 +160,20 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     let mut child =
         cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("{bin}: {e}"))?;
+    // Stdout is read on this thread (the progress callback isn't Send), so Stop is watched on
+    // another one, which only needs the pid to kill the program and what it started.
+    let done = Arc::new(AtomicBool::new(false));
+    let watcher = {
+        let (done, job, pid) = (done.clone(), p.job.to_string(), child.id());
+        std::thread::spawn(move || {
+            while !done.load(Ordering::Relaxed) {
+                if stopped(&job) {
+                    return kill_tree(pid);
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        })
+    };
     let duration = Arc::new(Mutex::new(None));
     let stderr = drain_stderr(child.stderr.take().unwrap(), duration.clone());
     let stdout = drain_stdout(child.stdout.take().unwrap(), |secs| {
@@ -166,18 +181,13 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
             emit(&Progress { pct: Some((secs / d).clamp(0.0, 1.0)), ..*p });
         }
     });
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-            break status;
-        }
-        if stopped(p.job) {
-            kill_tree(child.id());
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(STOPPED_MSG.into());
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    };
+    let status = child.wait().map_err(|e| e.to_string());
+    done.store(true, Ordering::Relaxed);
+    let _ = watcher.join();
+    if stopped(p.job) {
+        return Err(STOPPED_MSG.into());
+    }
+    let status = status?;
     let stderr = stderr.join().unwrap_or_default();
     if status.success() {
         return Ok(());
@@ -226,10 +236,11 @@ fn run_step(emit: Emit, p: &Progress, job: &Job, step: Step, produced: &mut Vec<
         Step::Probe(input, into) => probe(&input, &into),
         Step::Then(next) => next(job)?.into_iter().try_for_each(|s| run_step(emit, p, job, s, produced)),
         Step::Fail(msg) => Err(msg),
-        Step::Try(step) => {
-            let _ = run_step(emit, p, job, *step, produced);
-            Ok(())
-        }
+        // A failure is fine, a Stop is not: the job ends there.
+        Step::Try(step) => match run_step(emit, p, job, *step, produced) {
+            Err(e) if e == STOPPED_MSG => Err(e),
+            _ => Ok(()),
+        },
         Step::Copy(from, to) => {
             if let Some(dir) = to.parent() {
                 fs::create_dir_all(dir).map_err(|e| e.to_string())?;

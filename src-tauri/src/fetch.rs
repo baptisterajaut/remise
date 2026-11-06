@@ -252,7 +252,7 @@ fn unpack(d: &Download, part: &Path, into: &Path) -> Result<(), String> {
     let result = if name.ends_with(".tar.gz") {
         run("tar", &["-xzf", &src, "-C", &dest], b"")
     } else if name.ends_with(".msi") {
-        run("msiexec", &["/a", &src, "/qn", &format!("TARGETDIR={dest}")], b"")
+        msi(part, into)
     } else if name.ends_with(".dmg") && cfg!(target_os = "macos") {
         mount_and_copy(part, into)
     } else if [".zip", ".dmg", ".AppImage"].iter().any(|e| name.ends_with(e)) {
@@ -278,7 +278,29 @@ fn run(bin: &str, args: &[&str], input: &[u8]) -> Result<(), String> {
         let _ = stdin.write_all(input);
     }
     let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    if out.status.success() { Ok(()) } else { Err(format!("{bin}: {}", String::from_utf8_lossy(&out.stderr).trim())) }
+    if out.status.success() { Ok(()) } else { Err(format!("{bin} ({}): {}", out.status, String::from_utf8_lossy(&out.stderr).trim())) }
+}
+
+/// An administrative install only unpacks (no rights needed, nothing registered). msiexec wants
+/// backslashes only, and says nothing on stderr: its log tells why it failed.
+fn msi(part: &Path, into: &Path) -> Result<(), String> {
+    let win = |p: &Path| p.display().to_string().replace('/', "\\");
+    let log = into.with_extension("msi.log");
+    let target = format!("TARGETDIR={}", win(into));
+    let res = run("msiexec", &["/a", &win(part), "/qn", "/norestart", &target, "/l*v", &win(&log)], b"");
+    let why = res.as_ref().err().map(|e| {
+        // The log is UTF-16 on Windows; keep the lines that name the error.
+        let raw = fs::read(&log).unwrap_or_default();
+        let text: String = if raw.starts_with(&[0xFF, 0xFE]) {
+            char::decode_utf16(raw[2..].as_chunks::<2>().0.iter().map(|b| u16::from_le_bytes(*b))).map(|c| c.unwrap_or('?')).collect()
+        } else {
+            String::from_utf8_lossy(&raw).into_owned()
+        };
+        let errors: Vec<&str> = text.lines().filter(|l| l.contains("Error") || l.contains("error code")).take(4).collect();
+        format!("{e} {}", errors.join(" / "))
+    });
+    let _ = fs::remove_file(&log);
+    why.map_or(Ok(()), Err)
 }
 
 /// Mount, copy each .app with `ditto` (it keeps links, attributes and the signature), unmount.

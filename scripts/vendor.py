@@ -297,13 +297,13 @@ PLATFORMS = {
     # AppImage. BtbN keeps month-end autobuilds, so this tag doesn't vanish like the dailies.
     "linux-x64": [
         ghostscript("linux-x64", "4f3f0cd02a6457c40e3caea91fe2b9cef132da73fa12df38d948a40f7555e51c"),
-        imagemagick_linux(),
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
              sha256="db367d897829f22c4198ce1094143c9d467bd6ee7dfabc44ba6f02056b24f8b1",
              picks=[("**/bin/qpdf", "qpdf/bin"), ("**/lib/*.so*", "qpdf/lib")]),
         Item(**SEVENZIP, url=f"{GH}/ip7z/7zip/releases/download/26.05/7z2605-linux-x64.tar.xz",
              sha256="22cf82fcc6eb7474f1d5bb4f02c0f8ebd573a718089d6833dc30f8350a3b232e",
              picks=[("7zzs", "7zip"), ("?License.txt", "licenses/7zip")]),
+        imagemagick_linux(),  # after 7-Zip, which unpacks it
         Item(**FFMPEG, source=f"https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (build recipe: {GH}/BtbN/FFmpeg-Builds)",
              url=f"{GH}/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-9.0.tar.xz",
              sha256="68ee646831adaae2495618346f3bba94ff207ff83bbd34d643e7004730d66269",
@@ -358,7 +358,11 @@ def unpack(archive, into):
     elif name.endswith((".tar.gz", ".tgz", ".tar.xz")):
         with tarfile.open(archive) as t:
             t.extractall(into, filter="data")
-    elif name.endswith((".7z", ".exe", ".AppImage")):  # an AppImage is an ELF stub + SquashFS
+    elif name.endswith(".AppImage"):
+        # An ELF stub + SquashFS. Distro p7zip (16.02, on Ubuntu runners) can't open it: use the
+        # 7-Zip 26 that linux-x64 installs first.
+        subprocess.run([str(OUT / "7zip" / "7zzs"), "x", "-y", f"-o{into}", str(archive)], check=True, stdout=subprocess.DEVNULL)
+    elif name.endswith((".7z", ".exe")):
         subprocess.run(["7z", "x", "-y", f"-o{into}", str(archive)], check=True, stdout=subprocess.DEVNULL)
     else:  # a plain file, keep its upstream name
         shutil.copy(archive, into / archive.name.split("-", 1)[1])

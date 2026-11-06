@@ -360,10 +360,10 @@ fn smoke_mixed_clips_join_and_insert() {
 fn smoke_stop_kills_the_running_program() {
     let fx = fixtures("stop");
     let long = fx.dir.join("long.mp4");
-    sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "testsrc=s=1280x720:d=60", "-pix_fmt", "yuv420p", "-preset", "ultrafast", &tools::s(&long)]);
+    sh("ffmpeg", &["-y", "-f", "lavfi", "-i", "testsrc=s=1280x720:d=120", "-pix_fmt", "yuv420p", "-preset", "ultrafast", &tools::s(&long)]);
     let before = fs::read_dir(&fx.dir).unwrap().count();
     let stopper = std::thread::spawn(|| {
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(300));
         crate::runner::stop("stopme");
     });
     let started = std::time::Instant::now();

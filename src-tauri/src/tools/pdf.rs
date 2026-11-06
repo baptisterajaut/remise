@@ -555,7 +555,7 @@ pub static TOOLS: &[Tool] = &[
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "print", ext: |_| "pdf".into() },
-        build: |j| vec![chromium(j, j.input(), args!["--no-pdf-header-footer", format!("--print-to-pdf={}", j.out())])],
+        build: |j| chromium(j, j.input(), args!["--no-pdf-header-footer", format!("--print-to-pdf={}", j.out())]),
     },
     Tool {
         id: "pdf-append",
