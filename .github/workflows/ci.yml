@@ -38,7 +38,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
-          components: clippy
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri -> target
@@ -50,8 +50,7 @@ jobs:
         if: runner.os == 'Linux'
         run: pnpm test:ui
 
-  # Every tool against real binaries: the bundled ones (vendor/) plus, where upstream has no
-  # relocatable build, the system packages a user would install.
+  # Every tool against the binaries the installers ship (vendor/), then the first-use downloads.
   smoke:
     name: Smoke (${{ matrix.vendor }})
     strategy:
@@ -61,24 +60,22 @@ jobs:
           - { os: windows-latest, vendor: windows-x64 }
           - { os: ubuntu-24.04, vendor: linux-x64 }
           - { os: macos-latest, vendor: macos-arm64 }
+          - { os: macos-15-intel, vendor: macos-x64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Linux deps (webview to compile, IM6/gs/tesseract from the distro)
+      # Only what it takes to compile the webview and a Vulkan driver: every tool comes from
+      # vendor/, the same set the installers ship, so nothing here hides a missing one.
+      - name: Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
-            ghostscript tesseract-ocr imagemagick mesa-vulkan-drivers
-          # Ubuntu's ImageMagick 6 policy forbids writing PDF; the fixtures need it.
-          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+            mesa-vulkan-drivers
           # Chrome's sandbox needs unprivileged user namespaces, which 24.04's AppArmor blocks.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: macOS deps without a relocatable upstream build
-        if: runner.os == 'macOS'
-        run: brew install ghostscript tesseract imagemagick potrace
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
@@ -89,9 +86,14 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: python scripts/vendor.py ${{ matrix.vendor }}
+      # The app itself: background removal runs it as a helper (`remise --cutout`).
+      - run: cargo build --manifest-path src-tauri/Cargo.toml
       - run: cargo test --manifest-path src-tauri/Cargo.toml -- --ignored smoke --nocapture
         env:
           REMISE_VENDOR: ${{ github.workspace }}/vendor
+          REMISE_SELF: ${{ github.workspace }}/src-tauri/target/debug/remise${{ runner.os == 'Windows' && '.exe' || '' }}
+          # The first-use downloads (models, Chromium, PdfCraft, LibreOffice) land here.
+          REMISE_USER_TOOLS: ${{ runner.temp }}/user-tools
           # waifu2x needs a Vulkan driver; Linux gets Mesa's CPU one (lavapipe) above, the
           # Windows runner has no driver at all.
           REMISE_SMOKE_SKIP: ${{ runner.os == 'Windows' && 'img-ai-upscale' || '' }}

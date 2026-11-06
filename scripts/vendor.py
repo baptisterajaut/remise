@@ -7,9 +7,10 @@ Every download is pinned by URL and SHA-256. The tools stay separate programs (R
 only spawns them), and vendor/THIRD_PARTY.md lists each one with its licence and the
 URL of its corresponding source, which is what the GPL/AGPL/LGPL ones require.
 
-Where upstream ships no relocatable build (Ghostscript, Tesseract and ImageMagick on macOS
-and Linux), the app falls back to an installed copy and greys the tool out otherwise.
-Needs `7z` on PATH for the Windows installers (preinstalled on GitHub's Windows runners).
+Where upstream ships no relocatable build, .github/workflows/deps.yml builds one from the
+pinned source (scripts/build-deps.sh) onto this repo's "deps" pre-release, and it is pinned
+here the same way. Needs `7z` on PATH for the Windows installers (preinstalled on GitHub's
+Windows runners).
 """
 
 import hashlib
@@ -41,6 +42,8 @@ class Item:
     # A leading "?" marks the pick optional (licence files whose name varies between releases).
     picks: list = field(default_factory=list)
     raw: bool = False  # a bare executable, not an archive or installer
+    # (dir inside the download, destination under vendor/, names to leave out): whole trees.
+    trees: list = field(default_factory=list)
 
 
 GS = dict(
@@ -72,6 +75,7 @@ YTDLP = dict(name="yt-dlp", version="2026.10.21",
 QJS = dict(name="QuickJS-NG", version="0.17.0", license="MIT",
            source=f"{GH}/quickjs-ng/quickjs/archive/refs/tags/v0.17.0.tar.gz")
 TESSDATA = "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0"
+DEPS = f"{GH}/baptisterajaut/remise/releases/download/deps"
 
 
 WAIFU2X = dict(name="waifu2x-ncnn-vulkan", version="20250915", license="MIT (code and the upconv_7_photo model)",
@@ -110,15 +114,98 @@ def documents(pandoc, typst, ytdlp, qjs):
     ]
 
 
-def tessdata(lang, sha):
+# OCR languages for Ghostscript's built-in Tesseract (2-4 MB each).
+LANGS = {
+    "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "fra": "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
+    "deu": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+    "spa": "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
+    "ita": "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827",
+    "por": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
+    "nld": "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6",
+}
+
+
+def ocr_languages():
+    return [Item(name=f"Tesseract traineddata ({lang})", version="tessdata_fast 4.1.0", license="Apache-2.0",
+                 source=f"{GH}/tesseract-ocr/tessdata_fast", url=f"{TESSDATA}/{lang}.traineddata", sha256=sha,
+                 picks=[(f"{lang}.traineddata", "tessdata")])
+            for lang, sha in LANGS.items()]
+
+
+WHISPER = dict(name="whisper.cpp", version="1.9.5", license="MIT",
+               source=f"{GH}/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz")
+
+
+def whisper(asset, sha, picks):
+    """Speech to text for Transcribe; the model is downloaded by the app on first use. The binary
+    archives carry no licence file, so it comes from the tagged source."""
+    url = asset if asset.startswith("http") else f"{GH}/ggml-org/whisper.cpp/releases/download/b5454/{asset}"
+    return [
+        Item(**WHISPER, url=url, sha256=sha, picks=picks),
+        Item(**WHISPER, url="https://raw.githubusercontent.com/ggml-org/whisper.cpp/v1.9.5/LICENSE",
+             sha256="94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+             picks=[("LICENSE", "licenses/whisper")], raw=True),
+    ]
+
+
+def onnxruntime(asset, sha, lib, renamed, version="1.31.1"):
+    """Loaded by `remise --cutout` (background removal) only, under a fixed name. Microsoft
+    stopped Intel Mac builds after 1.23.2, which Remise's API level (17) still accepts."""
+    return Item(name="ONNX Runtime", version=version, license="MIT (third-party notices in licenses/onnxruntime)",
+                source=f"{GH}/microsoft/onnxruntime/archive/refs/tags/v{version}.tar.gz",
+                url=f"{GH}/microsoft/onnxruntime/releases/download/v{version}/{asset}", sha256=sha,
+                picks=[(f"**/lib/{lib}", "onnxruntime", renamed), ("**/LICENSE", "licenses/onnxruntime"),
+                       ("**/ThirdPartyNotices.txt", "licenses/onnxruntime")])
+
+
+def ghostscript(target, sha):
+    """Built by deps.yml with its bundled Tesseract, init files and fonts compiled in."""
+    return Item(**GS, url=f"{DEPS}/ghostscript-10.08.0-{target}.tar.xz", sha256=sha,
+                picks=[("bin/gs", "ghostscript/bin"), ("LICENSE", "licenses/ghostscript")])
+
+
+def macos_built(target, gs, im, whisper_sha, potrace=None):
+    """What deps.yml builds for a Mac: Ghostscript, ImageMagick with its Homebrew delegate
+    libraries next to it (@executable_path/lib), whisper.cpp, and potrace on Apple Silicon."""
+    items = [
+        ghostscript(target, gs),
+        Item(name="ImageMagick", version="7.1.2-35",
+             license="ImageMagick License (Apache-2.0 style); the delegate libraries next to it, built by Homebrew, "
+                     "keep their own licences (x265: GPL-2.0, libheif and libde265: LGPL-3.0, the rest permissive)",
+             source=f"{GH}/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-35.tar.gz; the libraries: the source "
+                    "archives listed by each Homebrew formula, https://formulae.brew.sh",
+             url=f"{DEPS}/imagemagick-7.1.2-35-{target}.tar.xz", sha256=im,
+             picks=[("magick", "imagemagick"), ("lib/*.dylib", "imagemagick/lib"), ("config/*.xml", "imagemagick/config"),
+                    ("LICENSE", "licenses/imagemagick"), ("NOTICE", "licenses/imagemagick")]),
+        Item(**WHISPER, url=f"{DEPS}/whisper.cpp-1.9.5-{target}.tar.xz", sha256=whisper_sha,
+             picks=[("whisper-cli", "whisper"), ("LICENSE", "licenses/whisper")]),
+    ]
+    if potrace:
+        items.append(Item(**POTRACE, url=f"{DEPS}/potrace-1.16-{target}.tar.xz", sha256=potrace,
+                          picks=[("potrace", "potrace"), ("COPYING", "licenses/potrace")]))
+    return items
+
+
+def imagemagick_linux():
+    """The official AppImage, unpacked: its AppRun (shipped as `magick`) points ImageMagick at its
+    own libraries and config. The libMagick*.so.10 symlinks are the only links; their targets are
+    left out so the 9 MB libraries aren't shipped twice."""
+    lib = "imagemagick/usr/lib"
     return Item(
-        name=f"Tesseract traineddata ({lang})",
-        version="tessdata_fast 4.1.0",
-        license="Apache-2.0",
-        source=f"{GH}/tesseract-ocr/tessdata_fast",
-        url=f"{TESSDATA}/{lang}.traineddata",
-        sha256=sha,
-        picks=[(f"{lang}.traineddata", "tesseract/tessdata")],
+        name="ImageMagick", version="7.1.2-35",
+        license="ImageMagick License (Apache-2.0 style); the AppImage carries Ubuntu 22.04 libraries under their "
+                "own licences (copyright files under licenses/imagemagick/, x265 is GPL-2.0)",
+        source=f"{GH}/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-35.tar.gz; the libraries: Ubuntu 22.04 (jammy) "
+               "source packages, https://packages.ubuntu.com/source/jammy/",
+        url=f"{GH}/ImageMagick/ImageMagick/releases/download/7.1.2-35/ImageMagick-7.1.2-35-gcc-x86_64.AppImage",
+        sha256="f111044ed06b68cfb478df724c5a32d35145afa21073242f888d234a2f8cc002",
+        picks=[("AppRun", "imagemagick", "magick"), ("usr/bin/magick", "imagemagick/usr/bin"),
+               ("usr/lib/lib[!M]*.so*", lib), ("usr/lib/libMagick*.so.10", lib)],
+        trees=[("usr/lib/ImageMagick-7.1.2", f"{lib}/ImageMagick-7.1.2", []),
+               ("usr/etc/ImageMagick-7", "imagemagick/usr/etc/ImageMagick-7", []),
+               ("usr/share/ImageMagick-7", "imagemagick/usr/share/ImageMagick-7", []),
+               ("usr/share/doc", "licenses/imagemagick", ["www", "index.html"])],
     )
 
 
@@ -145,15 +232,6 @@ PLATFORMS = {
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-msvc64.zip",
              sha256="db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d",
              picks=[("**/bin/*", "qpdf/bin"), ("?**/LICENSE.txt", "licenses/qpdf")]),
-        Item(name="Tesseract", version="5.5.3", license="Apache-2.0",
-             source=f"{GH}/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz",
-             url=f"{GH}/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe",
-             sha256="bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4",
-             # configs/pdf, configs/txt and pdf.ttf: the PDF/text renderers silently write nothing without them.
-             picks=[("tesseract.exe", "tesseract"), ("*.dll", "tesseract"),
-                    ("tessdata/configs/*", "tesseract/tessdata/configs"), ("tessdata/pdf.ttf", "tesseract/tessdata")]),
-        tessdata("eng", "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"),
-        tessdata("fra", "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca"),
         Item(name="ImageMagick", version="7.1.2-35",
              license="ImageMagick License (Apache-2.0 style); statically links LGPL libraries, see the bundled SBOM",
              source=f"{GH}/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-35.tar.gz",
@@ -177,10 +255,13 @@ PLATFORMS = {
         ("typst-x86_64-pc-windows-msvc.zip", "19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736"),
         ("yt-dlp.exe", "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555"),
         ("qjs-windows-x86_64.exe", "2aeabf0092c3262d6b2609824418f7dd7ed1f1df939f73b2b15645230cac0d77"),
-    ) + upscaler("windows", "7425be94b94e4c8f37a1e433ac0e0100c43790e2c37418f4b65d8235adfbdc87"),
-    # CBA: Ghostscript, Tesseract and ImageMagick have no relocatable macOS build upstream;
-    # bundling them means brew + dylibbundler + inside-out re-signing per arch. Until then the
-    # app greys those tools out with an install hint.
+    ) + upscaler("windows", "7425be94b94e4c8f37a1e433ac0e0100c43790e2c37418f4b65d8235adfbdc87") + ocr_languages()
+    + [onnxruntime("onnxruntime-win-x64-1.31.1.zip", "5869e26bb25314375f2d5ef1877e3ea06b1543d6c710e6e4a1ec2f7177ab4b2c",
+                   "onnxruntime.dll", "onnxruntime.dll")]
+    + whisper("whisper-bin-x64.zip", "6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb",
+              [("**/whisper-cli.exe", "whisper"), ("**/whisper.dll", "whisper"), ("**/ggml*.dll", "whisper")]),
+    # Ghostscript, ImageMagick and whisper.cpp have no relocatable macOS build upstream: they
+    # come from the deps workflow (macos_built).
     "macos-arm64": macos("arm64", "arm64/1789931890_9.0.2",
                          "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
                          "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79")
@@ -189,7 +270,9 @@ PLATFORMS = {
         ("typst-aarch64-apple-darwin.tar.xz", "48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a"),
         ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
         ("qjs-darwin-arm64", "8be3ddfe3397d2e692e4e1e8972ee9d032a0a580505d2f8b4ea528cf1b651c11"),
-    ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42"),
+    ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42") + ocr_languages()
+    + [onnxruntime("onnxruntime-osx-arm64-1.31.1.tgz", "2e1344a1926ee50eb25b38153cb6992c3567515aef0e677a1a520a1798896d6f",
+                   "libonnxruntime.1.31.1.dylib", "libonnxruntime.dylib")],
     "macos-x64": macos("x64", "amd64/1789931006_9.0.2",
                        "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4",
                        "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481")
@@ -201,9 +284,12 @@ PLATFORMS = {
         ("typst-x86_64-apple-darwin.tar.xz", "7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa"),
         ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
         ("qjs-darwin-x86_64", "9e5e101b4fd13cda3204222ca9f8be35412c41dcdef3745829633b7a67245412"),
-    ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42"),
+    ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42") + ocr_languages()
+    + [onnxruntime("onnxruntime-osx-x86_64-1.23.2.tgz", "d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6",
+                   "libonnxruntime.1.23.2.dylib", "libonnxruntime.dylib", version="1.23.2")],
     # AppImage. BtbN keeps month-end autobuilds, so this tag doesn't vanish like the dailies.
     "linux-x64": [
+        imagemagick_linux(),
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
              sha256="db367d897829f22c4198ce1094143c9d467bd6ee7dfabc44ba6f02056b24f8b1",
              picks=[("**/bin/qpdf", "qpdf/bin"), ("**/lib/*.so*", "qpdf/lib")]),
@@ -222,7 +308,13 @@ PLATFORMS = {
         ("typst-x86_64-unknown-linux-musl.tar.xz", "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c"),
         ("yt-dlp_linux", "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f"),
         ("qjs-linux-x86_64", "0bfc02511a9f549c28b53880d988fc7cd5d361e90c5e8afdfcd7dc6774ceace5"),
-    ) + upscaler("linux", "848e0fba55657d34da90b775b8139e9806dc754798b029f95e106ba8850a731f"),
+    ) + upscaler("linux", "848e0fba55657d34da90b775b8139e9806dc754798b029f95e106ba8850a731f") + ocr_languages()
+    + [onnxruntime("onnxruntime-linux-x64-1.31.1.tgz", "c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9",
+                   "libonnxruntime.so.1.31.1", "libonnxruntime.so")]
+    # The CPU backend is picked at run time among the libggml-cpu-* variants, by instruction set.
+    + whisper("whisper-bin-ubuntu-x64.tar.gz", "a72becf15d7917f990f6313867a52638b82b7f9ef237fb0c980dac56a135781c",
+              [("**/whisper-cli", "whisper"), ("**/libwhisper.so.1", "whisper"), ("**/libggml.so.0", "whisper"),
+               ("**/libggml-base.so.0", "whisper"), ("**/libggml-cpu-*.so", "whisper")]),
 }
 
 
@@ -258,7 +350,7 @@ def unpack(archive, into):
     elif name.endswith((".tar.gz", ".tgz", ".tar.xz")):
         with tarfile.open(archive) as t:
             t.extractall(into, filter="data")
-    elif name.endswith((".7z", ".exe")):
+    elif name.endswith((".7z", ".exe", ".AppImage")):  # an AppImage is an ELF stub + SquashFS
         subprocess.run(["7z", "x", "-y", f"-o{into}", str(archive)], check=True, stdout=subprocess.DEVNULL)
     else:  # a plain file, keep its upstream name
         shutil.copy(archive, into / archive.name.split("-", 1)[1])
@@ -282,6 +374,9 @@ def install(item):
                 target = OUT / dest / (rename[0] if rename else hit.name)
                 shutil.copy2(hit, target)
                 target.chmod(0o755)
+        for src, dest, skip in item.trees:
+            # Links become copies: Tauri resources don't keep them.
+            shutil.copytree(tmp / src, OUT / dest, ignore=shutil.ignore_patterns(*skip), dirs_exist_ok=True)
 
 
 # ImageMagick reads files by content, not by extension: a "photo.jpg" that is really MVG, MSL or
@@ -324,8 +419,19 @@ def main():
     for item in items:
         print(f"{item.name} {item.version}")
         install(item)
-    if (OUT / "imagemagick").is_dir():
-        (OUT / "imagemagick" / "policy.xml").write_text(IM_POLICY)
+    # whisper.cpp and ONNX Runtime need the MSVC runtime on Windows, which not every PC has: the
+    # copies that come with qpdf and waifu2x go next to them. whisper-cli finds them beside its
+    # exe; `remise --cutout` through the PATH that bins::command puts the vendor dirs on.
+    crt = ("qpdf/bin/msvcp140.dll", "qpdf/bin/msvcp140_1.dll", "qpdf/bin/vcruntime140.dll", "qpdf/bin/vcruntime140_1.dll")
+    for exe, extra in (("whisper/whisper-cli.exe", ("waifu2x/vcomp140.dll",)), ("onnxruntime/onnxruntime.dll", ())):
+        if (OUT / exe).is_file():
+            for dll in crt + extra:
+                shutil.copy2(OUT / dll, (OUT / exe).parent)
+    # Next to magick.exe on Windows, where the AppImage's AppRun points ImageMagick on Linux, and
+    # MAGICK_CONFIGURE_PATH on macOS.
+    for config in (OUT / "imagemagick", OUT / "imagemagick/usr/etc/ImageMagick-7", OUT / "imagemagick/config"):
+        if config.is_dir():
+            (config / "policy.xml").write_text(IM_POLICY)
     notice(items)
     print(f"vendor/ ready for {sys.argv[1]}")
 
