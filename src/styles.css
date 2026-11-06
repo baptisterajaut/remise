@@ -31,6 +31,7 @@
   --video: #c4860c;
   --audio: #833f72;
   --files: #5c6c26;
+  --create: #3553c9;
   --chain: #1d1914;
   --sans: "Bricolage", ui-sans-serif, sans-serif;
   --mono: "Plex Mono", ui-monospace, monospace;
@@ -54,6 +55,7 @@
     --video: #f0b23a;
     --audio: #d382be;
     --files: #a4b856;
+    --create: #8fa3ff;
     --chain: #f1e8d4;
     color-scheme: dark;
   }

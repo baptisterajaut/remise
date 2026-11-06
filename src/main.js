@@ -10,6 +10,7 @@ const FAMILIES = [
   ["image", "Image", "var(--image)"],
   ["video", "Video", "var(--video)"],
   ["audio", "Audio", "var(--audio)"],
+  ["create", "Create", "var(--create)"],
   ["files", "Files", "var(--files)"],
 ];
 const famColor = (f) => `var(--${f})`;
@@ -25,13 +26,24 @@ const PRODUCTS = {
   potrace: ["Potrace", "potrace"],
   rembg: ["rembg", null],
   pdfcraft: ["PdfCraft", null],
+  chromium: ["Chrome, Edge or Chromium", null],
+  "yt-dlp": ["yt-dlp", "yt-dlp"],
+  whisper: ["Whisper", null],
+  "realesrgan-ncnn-vulkan": ["Real-ESRGAN", null],
+};
+/** Optional tools that don't come from a package manager. */
+const EXTRA_HINTS = {
+  rembg: "pipx install rembg[cli]",
+  whisper: "pipx install openai-whisper",
+  pdfcraft: "PdfCraft: github.com/storytold/pdfcraft",
+  chromium: "Any of Google Chrome, Microsoft Edge or Chromium",
+  "realesrgan-ncnn-vulkan": "Real-ESRGAN: github.com/xinntao/Real-ESRGAN-ncnn-vulkan (unzip, keep models/ next to it)",
 };
 const product = (bin) => PRODUCTS[bin]?.[0] ?? bin;
 
 function installHint(bins) {
   const pkgs = bins.map((b) => PRODUCTS[b]?.[1]).filter(Boolean);
-  const extra = bins.includes("rembg") ? ["pipx install rembg[cli]"] : [];
-  if (bins.includes("pdfcraft")) extra.push("PdfCraft: github.com/storytold/pdfcraft");
+  const extra = bins.map((b) => EXTRA_HINTS[b]).filter(Boolean);
   const mgr = /Mac/.test(navigator.userAgent) ? "brew install" : /Win/.test(navigator.userAgent) ? "winget install" : "sudo apt install";
   return [pkgs.length && `${mgr} ${pkgs.join(" ")}`, ...extra].filter(Boolean).join("\n");
 }
@@ -84,7 +96,7 @@ const ext = (p) => {
   const b = base(p);
   return b.includes(".") ? b.split(".").pop().toLowerCase() : "";
 };
-const fits = (tool, paths) => !tool.accepts.length || paths.every((p) => tool.accepts.includes(ext(p)));
+const fits = (tool, paths) => !tool.generator && (!tool.accepts.length || paths.every((p) => tool.accepts.includes(ext(p))));
 const toolById = (id) => state.tools.find((t) => t.id === id);
 
 function defaults(tool) {
@@ -242,7 +254,10 @@ function openTool(tool, files = state.dropped ?? []) {
   };
   $("params").replaceChildren(...paramsForm(tool, params, onChange));
   $("accepts").textContent = tool.accepts.length ? tool.accepts.join(" · ") : "any file or folder";
-  addFiles(files);
+  // Generators make something from their settings alone: no drop zone, a Make button.
+  $("drop").hidden = $("clear").hidden = tool.generator;
+  if (!tool.generator) addFiles(files);
+  else renderRows();
 }
 
 function openChain(chain) {
@@ -256,6 +271,7 @@ function openChain(chain) {
   const first = toolById(chain.steps[0].tool);
   $("accepts").textContent = first?.accepts.join(" · ") ?? "";
   $("chain-steps").hidden = false;
+  $("drop").hidden = $("clear").hidden = false;
   $("chain-steps").replaceChildren(...chain.steps.map(stepSummary));
 }
 
@@ -294,6 +310,7 @@ let jobSeq = 0;
 const row = (paths) => ({ id: `j${++jobSeq}`, paths, state: "queued", pct: null, step: 0, out: [], err: "" });
 
 function rowLabel(r) {
+  if (!r.paths.length) return state.bench.tool.name;
   return r.paths.length > 1 ? `${base(r.paths[0])} + ${r.paths.length - 1} more` : base(r.paths[0]);
 }
 
@@ -325,8 +342,10 @@ function renderRows() {
   $("files").replaceChildren(...b.rows.map(rowView));
   const missing = benchTools().flatMap((t) => t.missing);
   const run = $("run");
-  run.disabled = b.running || missing.length > 0 || !b.rows.some((r) => r.state === "queued");
-  run.textContent = missing.length ? `Needs ${[...new Set(missing)].map(product).join(", ")}` : b.running ? "Running…" : "Run";
+  const generator = b.tool?.generator;
+  run.disabled = b.running || missing.length > 0 || (!generator && !b.rows.some((r) => r.state === "queued"));
+  const idle = generator ? "Make it" : "Run";
+  run.textContent = missing.length ? `Needs ${[...new Set(missing)].map(product).join(", ")}` : b.running ? "Running…" : idle;
   run.title = missing.length ? installHint([...new Set(missing)]) : "";
 }
 
@@ -347,6 +366,7 @@ async function runRow(r) {
 
 async function runAll() {
   const b = state.bench;
+  if (b.tool?.generator) b.rows.push(row([]));
   b.running = true;
   // Sequential on purpose: these tools already use every core.
   for (const r of b.rows.filter((x) => x.state === "queued")) await runRow(r);
@@ -367,7 +387,7 @@ function onProgress({ payload }) {
 /* ───────────────────────── chains ───────────────────────── */
 
 function chainable(tool) {
-  return !tool.multi && tool.output !== "none";
+  return !tool.multi && !tool.generator && tool.output !== "none";
 }
 
 function renderDraft() {

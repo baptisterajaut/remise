@@ -34,8 +34,9 @@ window.__run = (args) => new Promise((res, rej) => {
     window.__listeners.progress({ payload: { job: args.job, step: 0, steps: args.steps.length, pct: p } });
     if (p < 1) return;
     clearInterval(t);
-    if (args.inputs[0].includes("broken")) rej("gs: Error: /syntaxerror");
-    else res([args.inputs[0].replace(/\\.(\\w+)$/, ".out.$1")]);
+    const first = args.inputs[0] ?? "/Downloads/remise.made.png";
+    if (first.includes("broken")) rej("gs: Error: /syntaxerror");
+    else res([first.replace(/\\.(\\w+)$/, ".out.$1")]);
   }, 60);
 });
 window.__drop = (paths) => {
@@ -119,12 +120,33 @@ async function chainFlow(page, shot) {
   assert.ok(next.includes("aud-compress") && !next.includes("pdf-compress"), "audio tools follow Extract audio");
 }
 
+async function generatorFlow(page, shot) {
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Create/ }).click();
+  await page.getByRole("button", { name: /Gradient/ }).click();
+  assert.ok(await page.locator("#drop").isHidden(), "generators have no drop zone");
+  await page.getByRole("button", { name: "Radial", exact: true }).click();
+  await page.getByRole("button", { name: "Make it", exact: true }).click();
+  await page.waitForSelector(".files li.done");
+  await shot("generator");
+  const run = await page.evaluate(() => window.__runs.at(-1));
+  assert.deepEqual(run.inputs, []);
+  assert.equal(run.steps[0].tool, "create-gradient");
+  assert.equal(run.steps[0].params.kind, "radial");
+  // Dropped files never offer a generator.
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.__drop(["/d/photo.png"]));
+  const names = await page.locator(".wall .hook h3").allTextContents();
+  assert.ok(names.includes("Device mockup") && !names.includes("Gradient") && !names.includes("QR code"));
+}
+
 for (const scheme of ["light", "dark"]) {
   const { browser, page, errors, shot } = await open(scheme);
   await shot("wall");
   await toolFlow(page, shot);
   await wallFlow(page, shot);
   await chainFlow(page, shot);
+  await generatorFlow(page, shot);
   await browser.close();
   assert.deepEqual(errors, [], "no console errors");
   console.log(`ui ${scheme}: ok`);

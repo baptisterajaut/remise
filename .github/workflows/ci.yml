@@ -74,6 +74,8 @@ jobs:
             ghostscript tesseract-ocr imagemagick
           # Ubuntu's ImageMagick 6 policy forbids writing PDF; the fixtures need it.
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+          # Chrome's sandbox needs unprivileged user namespaces, which 24.04's AppArmor blocks.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: macOS deps without a relocatable upstream build
         if: runner.os == 'macOS'
         run: brew install ghostscript tesseract imagemagick potrace
