@@ -73,6 +73,10 @@ fn list_tools() -> Vec<ToolInfo> {
 
 #[tauri::command]
 async fn run(app: AppHandle, job: String, steps: Vec<runner::StepReq>, inputs: Vec<String>) -> Result<Vec<String>, String> {
+    // The id ends up in a scratch path that is later deleted: keep it boring.
+    if job.is_empty() || job.len() > 32 || !job.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("bad job id".into());
+    }
     // Generators have no input file to sit next to: their results go to Downloads.
     let fallback = app.path().download_dir().or_else(|_| app.path().home_dir()).unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {

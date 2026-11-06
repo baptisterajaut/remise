@@ -161,9 +161,10 @@ PLATFORMS = {
              sha256="34db4364da26c88d6b8cc5bbc1fff22b85d00d3b399c82fe85ee4790efacbbf1",
              picks=[("**/magick.exe", "imagemagick"), ("**/*.xml", "imagemagick"),
                     ("?**/LICENSE*", "licenses/imagemagick"), ("?**/*.cdx.json", "licenses/imagemagick")]),
-        Item(**SEVENZIP, url=f"{GH}/ip7z/7zip/releases/download/26.05/7z2605-extra.7z",
-             sha256="f27a8f103c84785026edcba1f67faf1357225df9d19ddb0b7760d55947141bc7",
-             picks=[("x64/7za.exe", "7zip"), ("?**/License.txt", "licenses/7zip")]),
+        # The full 7z.exe + 7z.dll: the standalone 7za can't unpack RAR or ISO.
+        Item(**SEVENZIP, url=f"{GH}/ip7z/7zip/releases/download/26.05/7z2605-x64.exe",
+             sha256="fd99e86f57d8f429ef5ed045bf98315af962e2309b0f1ba87a147a44c71647d0",
+             picks=[("7z.exe", "7zip"), ("7z.dll", "7zip"), ("?License.txt", "licenses/7zip")]),
         Item(**FFMPEG, source="https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (build recipe: https://www.gyan.dev/ffmpeg/builds/)",
              url=f"{GH}/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
              sha256="60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
@@ -283,6 +284,16 @@ def install(item):
                 target.chmod(0o755)
 
 
+# ImageMagick reads files by content, not by extension: a "photo.jpg" that is really MVG, MSL or
+# text can pull other local files into the result. The portable build ships with an open policy.
+IM_POLICY = """<policymap>
+  <policy domain="coder" rights="none" pattern="{MVG,MSL,TEXT,URL,HTTP,HTTPS,FTP,EPHEMERAL,SHOW,WIN}" />
+  <policy domain="path" rights="none" pattern="@*" />
+  <policy domain="resource" name="disk" value="8GiB" />
+</policymap>
+"""
+
+
 def notice(items):
     lines = [
         "# Third-party programs bundled with Remise",
@@ -313,6 +324,8 @@ def main():
     for item in items:
         print(f"{item.name} {item.version}")
         install(item)
+    if (OUT / "imagemagick").is_dir():
+        (OUT / "imagemagick" / "policy.xml").write_text(IM_POLICY)
     notice(items)
     print(f"vendor/ ready for {sys.argv[1]}")
 

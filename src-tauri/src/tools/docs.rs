@@ -8,10 +8,15 @@ const DOCS: &[&str] = &["docx", "odt", "md", "markdown", "html", "htm", "epub", 
 const MARKDOWN: &[&str] = &["md", "markdown"];
 
 /// `pandoc <input> <extra…> -o <out>`; Typst does the PDF typesetting.
-fn pandoc(j: &Job, extra: Vec<String>) -> Step {
+/// Anything but the user's own Markdown runs in `--sandbox`: an HTML `<img src=/abs/path>`,
+/// a LaTeX `\input` or an RST include would otherwise pull local files into the output.
+pub fn pandoc(j: &Job, extra: Vec<String>) -> Step {
     // Images in a Markdown file are relative to the file, not to wherever we run from.
     let dir = j.inputs[0].parent().map(s).unwrap_or_default();
     let mut a = args![j.input(), format!("--resource-path={dir}")];
+    if !MARKDOWN.contains(&j.in_ext().as_str()) {
+        a.push("--sandbox".into());
+    }
     a.extend(extra);
     if j.out.extension().is_some_and(|e| e == "pdf") {
         a.extend(args!["--pdf-engine=typst"]);
@@ -88,7 +93,7 @@ pub static TOOLS: &[Tool] = &[
             vec![Step::RunIn(
                 j.out.clone(),
                 "pandoc",
-                args![j.input(), "-t", "gfm", "--wrap=none", "--extract-media=media", "-o", format!("{}.md", j.stem())],
+                args![j.input(), "--sandbox", "-t", "gfm", "--wrap=none", "--extract-media=media", "-o", format!("{}.md", j.stem())],
             )]
         },
     },

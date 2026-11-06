@@ -372,14 +372,14 @@ pub static TOOLS: &[Tool] = &[
                 Ok(p) => p,
                 Err(fail) => return vec![fail],
             };
-            // The subtitles filter wants its path escaped twice over; a copy with a known name in
-            // scratch keeps that to the drive colon on Windows.
-            let copy = j.tmp.join(format!("subs.{}", ext_of(Path::new(&subs))));
-            let path = s(&copy).replace('\\', "/").replace(':', "\\:");
-            let vf = format!("subtitles='{path}':force_style='FontSize={},Outline=1'", j.p("size"));
+            // The subtitles filter wants its path escaped twice over; a copy with a fixed name, read
+            // from inside scratch, sidesteps quotes, colons and backslashes in the real path.
+            let name = format!("subs.{}", ext_of(Path::new(&subs)));
+            let vf = format!("subtitles={name}:force_style='FontSize={},Outline=1'", j.p("size"));
             vec![
-                Step::Copy(PathBuf::from(subs), copy),
-                Step::Run(
+                Step::Copy(PathBuf::from(subs), j.tmp.join(&name)),
+                Step::RunIn(
+                    j.tmp.clone(),
                     "ffmpeg",
                     args![
                         "-hide_banner", "-nostdin", "-y", "-i", video, "-vf", vf,
@@ -527,8 +527,12 @@ fn fresh_ytdlp(_: &Job) -> Result<Vec<Step>, String> {
     if let (Some(current), Some(user)) = (crate::bins::which("yt-dlp"), crate::bins::user_tools())
         && crate::bins::is_bundled(&current)
     {
+        // Copy under a temporary name, then rename: a half-copied yt-dlp must never look installed.
         let name = current.file_name().ok_or("odd yt-dlp path")?;
-        steps.push(Step::Copy(current.clone(), user.join("yt-dlp").join(name)));
+        let target = user.join("yt-dlp").join(name);
+        let part = target.with_extension("part");
+        steps.push(Step::Try(Box::new(Step::Copy(current.clone(), part.clone()))));
+        steps.push(Step::Try(Box::new(Step::Rename(part, target))));
     }
     steps.push(Step::Try(Box::new(Step::Run("yt-dlp", args!["-U"]))));
     Ok(steps)

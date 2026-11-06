@@ -434,7 +434,9 @@ function addStep() {
 function saveChain() {
   const name = $("chain-name").value.trim();
   if (!name || state.draft.length < 2) return toast("A chain needs a name and at least two steps");
-  state.chains.push({ id: `c${Date.now().toString(36)}`, name, steps: state.draft });
+  // Passwords stay out of storage: a saved chain asks again.
+  const steps = state.draft.map((s) => ({ ...s, params: Object.fromEntries(Object.entries(s.params).filter(([k]) => k !== "password")) }));
+  state.chains.push({ id: `c${Date.now().toString(36)}`, name, steps });
   save("remise.chains", state.chains);
   state.draft = [];
   $("chain-name").value = "";

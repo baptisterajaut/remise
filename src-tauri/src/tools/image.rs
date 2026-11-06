@@ -564,12 +564,13 @@ fn diff_plan(j: &Job) -> Result<Vec<Step>, String> {
 fn attach_plan(j: &Job) -> Result<Vec<Step>, String> {
     let logo = s(&j.inputs[0]);
     let size: f64 = j.p("size").parse().unwrap_or(15.0);
+    let names = distinct_names(&j.inputs[1..]);
     j.inputs[1..]
         .iter()
         .enumerate()
         .map(|(i, p)| {
             let w: f64 = j.read_tmp(&format!("{i}.w"))?.trim().parse().map_err(|_| format!("can't read the size of {}", p.display()))?;
-            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = names[i].clone();
             let (logo_w, margin) = ((w * size / 100.0).round(), (w / 40.0).round());
             Ok(Step::Run(
                 "magick",

@@ -107,7 +107,7 @@ A few tools use another free program that you install yourself. Until you do, th
 | Transcribe | [Whisper](https://github.com/openai/whisper) |
 | Office to PDF | [LibreOffice](https://www.libreoffice.org/download/) |
 | PDF Studio (annotate, sign, fill forms) | [PdfCraft](https://github.com/storytold/pdfcraft) |
-| HTML to PDF/image, Ebook to PDF | Google Chrome, Microsoft Edge or Chromium (Edge comes with Windows) |
+| HTML to PDF, HTML to image | Google Chrome, Microsoft Edge or Chromium (Edge comes with Windows) |
 
 ## Questions
 

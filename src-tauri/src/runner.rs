@@ -39,8 +39,10 @@ pub fn unique(path: PathBuf) -> PathBuf {
     (2..).map(|n| path.with_file_name(format!("{stem}-{n}{ext}"))).find(|p| !p.exists()).unwrap()
 }
 
-/// Rename, or copy + delete when scratch and destination sit on different filesystems.
+/// Rename, or copy + delete when scratch and destination sit on different filesystems. The free
+/// name is picked again at the last moment: another run may have taken it in the meantime.
 fn move_file(from: &Path, to: &Path) -> Result<PathBuf, String> {
+    let to = &unique(to.to_path_buf());
     if fs::rename(from, to).is_err() {
         fs::copy(from, to).map_err(|e| format!("can't write {}: {e}", to.display()))?;
         let _ = fs::remove_file(from);
@@ -287,6 +289,21 @@ impl Chain<'_> {
     }
 }
 
+/// A fresh scratch dir with an unguessable name, created exclusively (owner-only on Unix): on a
+/// shared /tmp nobody can pre-create it.
+fn scratch_dir(job_id: &str) -> Result<PathBuf, String> {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("remise-{}-{job_id}-{nanos:x}", std::process::id()));
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(&dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
+    Ok(dir)
+}
+
 /// `fallback` is where a generator (no input file) writes its result.
 pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<String>, fallback: &Path) -> Result<Vec<String>, String> {
     let generator = steps.first().and_then(|s| find(&s.tool)).is_some_and(|t| t.inputs == Inputs::None);
@@ -303,7 +320,7 @@ pub fn run_chain(emit: Emit, job_id: &str, steps: Vec<StepReq>, inputs: Vec<Stri
         job_id,
         home,
         stem,
-        scratch: std::env::temp_dir().join(format!("remise-{}-{job_id}", std::process::id())),
+        scratch: scratch_dir(job_id)?,
         steps: steps.len(),
         suffixes: Vec::new(),
     };

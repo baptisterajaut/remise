@@ -51,9 +51,17 @@ pub static TOOLS: &[Tool] = &[
         output: Output::None,
         // CBA: no live preview / undo, the patterns are simple enough to eyeball
         build: |j| {
+            let pattern = j.p("pattern");
+            if pattern.contains(['/', '\\']) || pattern.contains("..") || pattern.trim().is_empty() {
+                return vec![Step::Fail("the pattern is a file name: no slashes, no ..".into())];
+            }
+            if j.inputs.len() > 1 && !pattern.contains("{n}") && !pattern.contains("{name}") {
+                return vec![Step::Fail("with several files, put {n} or {name} in the pattern".into())];
+            }
             let start: usize = j.p("start").trim().parse().unwrap_or(1);
             let width = (start + j.inputs.len()).saturating_sub(1).to_string().len().max(2);
-            j.inputs
+            let renames = j
+                .inputs
                 .iter()
                 .enumerate()
                 .map(|(i, p)| {
@@ -65,7 +73,8 @@ pub static TOOLS: &[Tool] = &[
                     }
                     Step::Rename(p.clone(), p.with_file_name(name))
                 })
-                .collect()
+                .collect();
+            all_or_nothing(renames)
         },
     },
     Tool {
@@ -102,6 +111,20 @@ pub static TOOLS: &[Tool] = &[
     },
 ];
 
+/// Renames are only started once every target is known to be free and distinct, so a batch never
+/// stops half-way with some files renamed and others not.
+fn all_or_nothing(steps: Vec<Step>) -> Vec<Step> {
+    let mut seen = std::collections::HashSet::new();
+    for step in &steps {
+        if let Step::Rename(from, to) = step
+            && (from != to && (to.exists() || !seen.insert(to.clone())))
+        {
+            return vec![Step::Fail(format!("{} already exists; nothing was renamed", to.display()))];
+        }
+    }
+    steps
+}
+
 /// Folder a file goes to. `month` comes from the file's modified time, read at run time.
 fn sort_plan(j: &Job) -> Result<Vec<Step>, String> {
     j.inputs
@@ -122,7 +145,8 @@ fn sort_plan(j: &Job) -> Result<Vec<Step>, String> {
             let name = p.file_name().ok_or("odd file name")?;
             Ok(Step::Rename(p.clone(), p.with_file_name(folder).join(name)))
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()
+        .map(all_or_nothing)
 }
 
 pub fn kind_of(ext: &str) -> &'static str {

@@ -226,7 +226,6 @@ const TRIM: &[Param] = &[
 mod audio;
 pub mod create;
 pub mod docs;
-pub mod epub;
 pub mod files;
 pub mod image;
 pub mod pdf;
@@ -288,6 +287,26 @@ pub fn size_of(j: &Job) -> Result<(f64, f64), String> {
     let text = j.read_tmp("size.txt")?;
     let mut it = text.split_whitespace().filter_map(|v| v.parse::<f64>().ok());
     it.next().zip(it.next()).ok_or_else(|| format!("unreadable image size `{text}`"))
+}
+
+/// File names for a batch landing in one folder: `a/x.pdf` and `b/x.pdf` become `x.pdf`, `x-2.pdf`.
+pub fn distinct_names(paths: &[PathBuf]) -> Vec<String> {
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    paths
+        .iter()
+        .map(|p| {
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
+            let n = seen.entry(name.to_lowercase()).or_insert(0);
+            *n += 1;
+            match *n {
+                1 => name,
+                k => {
+                    let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+                    format!("{}-{k}{ext}", stem_of(p))
+                }
+            }
+        })
+        .collect()
 }
 
 /// A PostScript string literal.

@@ -52,6 +52,17 @@ Set `REMISE_VENDOR=$PWD/vendor` to make the app or the smoke test use a vendored
 
 **yt-dlp updates itself.** On first use, the bundled copy is copied into the per-user tools folder, which is writable. Each download first tries `yt-dlp -U` there; if the update fails, the download carries on with the version already there.
 
+## Roadmap: fewer manual installs
+
+An adversarial review measured these options; sizes and licences were checked against the release pages.
+
+- **Ghostscript with built-in OCR on macOS and Linux.** Build the official 10.08.0 tarball in CI; it carries Tesseract and Leptonica, so `-sDEVICE=pdfocr24` replaces the separate Tesseract for PDF OCR. AGPL, already handled on Windows.
+- **ImageMagick 7 on Linux.** Unpack the official AppImage (33 MB) with 7z, with no FUSE needed, and ship the same hardened `policy.xml`. This also fixes PDF writing on distros that still have IM 6.
+- **Headless Chromium on first use.** `chrome-headless-shell` from Chrome for Testing (105–128 MB) for HTML → PDF/image on Macs and Linux without a browser; Windows already has Edge.
+- **Transcription.** whisper.cpp (MIT, ~10 MB) plus `ggml-tiny-q5_1` (32 MB) on first use. Its macOS binaries need building in CI. Whistle/cactus is smaller, but its native source isn't published.
+- **Background removal.** The `ort` crate plus ONNX Runtime and `u2netp` (4.6 MB, Apache-2.0) on first use, instead of the Python rembg.
+- **Not worth bundling.** LibreOffice (220–375 MB); Pandoc already covers the text side of Office documents.
+
 ## Known limits
 
 These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):

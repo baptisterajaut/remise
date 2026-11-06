@@ -67,16 +67,28 @@ pub static TOOLS: &[Tool] = &[
             default: "1",
         }],
         output: Output::Dir("split"),
+        // qpdf has no %% escape and substitutes the first "%d" anywhere in the path: split under a
+        // neutral scratch name, then move the parts into place.
         build: |j| {
-            vec![Step::Run(
-                "qpdf",
-                // qpdf has no %% escape: it substitutes the first "%d" it finds.
-                args![
-                    format!("--split-pages={}", j.p("every")),
-                    j.input(),
-                    format!("{}-%d.pdf", s(&j.out.join(j.stem())))
-                ],
-            )]
+            vec![
+                Step::Run("qpdf", args![format!("--split-pages={}", j.p("every")), j.input(), j.tmp("part-%d.pdf")]),
+                Step::Then(|j| {
+                    let mut parts: Vec<_> = std::fs::read_dir(&j.tmp)
+                        .map_err(|e| e.to_string())?
+                        .flatten()
+                        .map(|e| e.path())
+                        .filter(|p| ext_of(p) == "pdf")
+                        .collect();
+                    parts.sort();
+                    Ok(parts
+                        .into_iter()
+                        .map(|p| {
+                            let n = stem_of(&p).trim_start_matches("part-").to_string();
+                            Step::Rename(p, j.out.join(format!("{}-{n}.pdf", j.stem())))
+                        })
+                        .collect())
+                }),
+            ]
         },
     },
     Tool {
@@ -265,6 +277,10 @@ pub static TOOLS: &[Tool] = &[
         // CBA: password goes through argv (visible in `ps` while qpdf runs), qpdf @argfile if that matters
         build: |j| {
             let pw = j.p("password");
+            if pw.is_empty() {
+                // qpdf would happily "encrypt" with an empty password: a lock anyone opens.
+                return vec![Step::Fail("choose a password".into())];
+            }
             vec![Step::Run("qpdf", args!["--encrypt", pw, pw, "256", "--", j.input(), j.out()])]
         },
     },
@@ -529,13 +545,13 @@ pub static TOOLS: &[Tool] = &[
         id: "pdf-ebook",
         family: Family::Pdf,
         name: "Ebook to PDF",
-        blurb: "EPUB to a printable PDF (needs Chrome, Edge or Chromium).",
-        bins: &["7z", "chromium"],
+        blurb: "EPUB to a printable PDF, typeset by Typst.",
+        bins: &["pandoc", "typst"],
         accepts: &["epub"],
         inputs: Inputs::One,
         params: &[],
         output: Output::File { suffix: "book", ext: |_| "pdf".into() },
-        build: |j| vec![Step::Run("7z", args!["x", "-y", format!("-o{}", j.tmp("book")), j.input()]), Step::Then(epub::plan)],
+        build: |j| vec![super::docs::pandoc(j, args![])],
     },
     Tool {
         id: "pdf-html",
@@ -571,9 +587,10 @@ pub static TOOLS: &[Tool] = &[
             docs.iter()
                 .map(|d| {
                     let (a, b) = if j.p("where") == "start" { (s(extra), s(d)) } else { (s(d), s(extra)) };
-                    let name = d.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                    Step::Run("qpdf", args!["--empty", "--pages", a, b, "--", s(&j.out.join(name))])
+                    (a, b)
                 })
+                .zip(distinct_names(docs))
+                .map(|((a, b), name)| Step::Run("qpdf", args!["--empty", "--pages", a, b, "--", s(&j.out.join(name))]))
                 .collect()
         },
     },

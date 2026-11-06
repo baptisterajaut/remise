@@ -1,6 +1,6 @@
 //! The pure helpers behind the newer tools.
 
-use crate::tools::{self, epub, parse_areas, parse_date, ps_str, pdf, Job, Step};
+use crate::tools::{self, parse_areas, parse_date, ps_str, pdf, Job, Step};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -52,22 +52,6 @@ fn files_are_sorted_by_kind() {
     assert_eq!(tools::files::kind_of("docx"), "Documents");
     assert_eq!(tools::files::kind_of("7z"), "Archives");
     assert_eq!(tools::files::kind_of("xyz"), "Other");
-}
-
-#[test]
-fn epub_reading_order_and_merge() {
-    let container = r#"<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>"#;
-    assert_eq!(epub::rootfile(container).as_deref(), Some("OEBPS/content.opf"));
-    let opf = r#"<manifest><item id="b" href="two.xhtml"/><item id='a' href='one%20a.xhtml'/></manifest>
-                 <spine><itemref idref="a"/><itemref idref="b"/></spine>"#;
-    assert_eq!(epub::spine(opf), ["one a.xhtml", "two.xhtml"]);
-    let merged = epub::merge(&[
-        r#"<html><head><link rel="stylesheet" href="s.css"/></head><body class="x"><p>One</p></body></html>"#.into(),
-        "<html><body><p>Two</p></body></html>".into(),
-    ]);
-    assert!(merged.contains(r#"<link rel="stylesheet" href="s.css"/>"#));
-    assert!(merged.find("One").unwrap() < merged.find("Two").unwrap());
-    assert_eq!(merged.matches("break-after: page").count(), 2);
 }
 
 #[test]
@@ -159,4 +143,36 @@ fn pandoc_typesets_pdf_with_typst_and_keeps_markdown_images_relative() {
     let Step::RunIn(dir, "pandoc", a) = &md[0] else { panic!("{md:?}") };
     assert_eq!(dir, &PathBuf::from("/out/x"));
     assert!(a.contains(&"--extract-media=media".to_string()) && a.contains(&"a.md".to_string()));
+}
+
+#[test]
+fn risky_inputs_are_sandboxed_but_markdown_keeps_its_images() {
+    let html = job("doc-convert", &["/d/page.html"], &[]);
+    let Step::Run("pandoc", a) = &html[0] else { panic!("{html:?}") };
+    assert!(a.contains(&"--sandbox".to_string()));
+    let md = job("doc-md-docx", &["/d/notes.md"], &[]);
+    let Step::Run("pandoc", a) = &md[0] else { panic!("{md:?}") };
+    assert!(!a.contains(&"--sandbox".to_string()));
+    let epub = job("pdf-ebook", &["/d/book.epub"], &[]);
+    let Step::Run("pandoc", a) = &epub[0] else { panic!("{epub:?}") };
+    assert!(a.contains(&"--sandbox".to_string()));
+}
+
+#[test]
+fn empty_password_is_refused() {
+    assert!(matches!(&job("pdf-encrypt", &["/d/a.pdf"], &[("password", "")])[0], Step::Fail(_)));
+}
+
+#[test]
+fn batch_rename_refuses_paths_and_name_clashes() {
+    for pattern in ["../x", "a/b", "sub\\x", ""] {
+        assert!(matches!(&job("batch-rename", &["/d/a.txt"], &[("pattern", pattern)])[0], Step::Fail(_)), "{pattern}");
+    }
+    assert!(matches!(&job("batch-rename", &["/d/a.txt", "/d/b.txt"], &[("pattern", "same")])[0], Step::Fail(_)));
+}
+
+#[test]
+fn same_names_from_different_folders_stay_distinct() {
+    let names = tools::distinct_names(&[PathBuf::from("/a/x.pdf"), PathBuf::from("/b/x.pdf"), PathBuf::from("/c/X.PDF")]);
+    assert_eq!(names, ["x.pdf", "x-2.pdf", "X-3.PDF"]);
 }

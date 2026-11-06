@@ -17,9 +17,9 @@ The mapping from their tool ids to ours lives in `scripts/coverage.py`. In a few
 
 - **Redact** works on areas given in %, with no text search.
 - **Sign** places a signature image; it is not a cryptographic signature.
-- **Ebook to PDF** reads EPUB only.
+- **Ebook to PDF** reads EPUB only (through Pandoc and Typst).
 - **Fonts** produces a specimen sheet.
 - **Remove background and Transcribe** need an optional install (rembg, Whisper). AI Upscale is bundled: waifu2x, which also runs on the CPU.
-- **HTML and EPUB rendering** uses the Chrome, Edge or Chromium already on the machine.
+- **HTML rendering** uses the Chrome, Edge or Chromium already on the machine.
 
 Remise also has tools that their list doesn't: Grayscale PDF, Optimize for web, PDF Studio (via PdfCraft), Auto-crop borders, non-AI Upscale, Extract frames, Waveform image, the Docs family through Pandoc, and Chains.

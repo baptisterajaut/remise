@@ -30,6 +30,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Tag matches the app version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          app=$(python -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          [ "v$app" = "${{ github.ref_name }}" ] || { echo "tag ${{ github.ref_name }} but app version $app"; exit 1; }
       - name: Linux build deps
         if: runner.os == 'Linux'
         run: |
