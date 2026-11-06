@@ -255,7 +255,7 @@ fn smoke_ffmpeg_reports_progress() {
 }
 
 /// A document's own images make it through Pandoc's sandbox; anything pointing elsewhere on the
-/// disk (absolute path, `..`, `file://`, raw HTML, a YAML `css:`) does not.
+/// disk (absolute path, `..`, `file://`, raw HTML, a YAML `css:`) or isn't an image does not.
 #[test]
 #[ignore]
 fn smoke_pandoc_keeps_own_images_only() {
@@ -263,7 +263,8 @@ fn smoke_pandoc_keeps_own_images_only() {
     let secret = tools::s(&fx.png2);
     let evil = fx.dir.join("sub").join("evil.md");
     fs::create_dir_all(evil.parent().unwrap()).unwrap();
-    let body = format!("---\ncss: {secret}\n---\n![a]({secret}) ![b](../b.png) ![c](file://{secret})\n\n<img src=\"{secret}\">\n");
+    fs::write(evil.with_file_name("id_rsa"), "PRIVATE KEY").unwrap();
+    let body = format!("---\ncss: {secret}\n---\n![a]({secret}) ![b](../b.png) ![c](file://{secret}) ![d](id_rsa)\n\n<img src=\"{secret}\">\n");
     fs::write(&evil, body).unwrap();
     let html = |input: &Path| {
         let out = go("doc-convert", &[input], &[("format", "html")], &fx.dir).unwrap();
@@ -271,7 +272,7 @@ fn smoke_pandoc_keeps_own_images_only() {
     };
     assert!(html(&fx.md).contains("data:image/png"), "own image kept");
     let leaked = html(&evil);
-    assert!(!leaked.contains("data:image") && !leaked.contains("base64"), "{leaked}");
+    assert!(!leaked.contains("data:") && !leaked.contains("PRIVATE"), "{leaked}");
     // In a .docx the image file names sit uncompressed in the zip directory.
     let docx = go("doc-md-docx", &[&fx.md], &[], &fx.dir).unwrap();
     assert!(fs::read(&docx[0]).unwrap().windows(11).any(|w| w == b"word/media/"), "docx image kept");
