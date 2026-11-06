@@ -257,6 +257,7 @@ function openTool(tool, files = state.dropped ?? []) {
   const onChange = (k, v) => {
     params[k] = v;
     if (k !== "password") save(`remise.params.${tool.id}`, { ...load(`remise.params.${tool.id}`, {}), [k]: v });
+    refreshPreview();
   };
   $("params").replaceChildren(...paramsForm(tool, params, onChange));
   $("accepts").textContent = tool.accepts.length ? tool.accepts.join(" · ") : "any file or folder";
@@ -310,6 +311,7 @@ function addFiles(paths) {
     b.rows.push(...fresh.map((p) => row([p])));
   }
   renderRows();
+  refreshPreview();
 }
 
 let jobSeq = 0;
@@ -329,6 +331,30 @@ function rowStatus(r) {
   return { queued: "ready", done: "done", fail: "failed" }[r.state];
 }
 
+/** Up to 8 planned renames, or why the tool would refuse; only file tools have one. */
+function previewView() {
+  const p = state.bench.preview;
+  if (!p) return null;
+  if (p.err) return h("pre", { class: "err" }, p.err);
+  const lines = p.pairs.slice(0, 8).map(([from, to]) => h("li", { title: `${from} → ${to}` }, `${from} → ${to}`));
+  if (p.pairs.length > 8) lines.push(h("li", {}, `…and ${p.pairs.length - 8} more`));
+  return h("ul", { class: "preview" }, ...lines);
+}
+
+/** Batch rename and Sort & route show what they will do before Run. */
+async function refreshPreview() {
+  const b = state.bench;
+  const r = b?.tool?.output === "none" && b.rows.find((x) => x.state === "queued");
+  if (!r) return;
+  try {
+    const pairs = await invoke("preview", { tool: b.tool.id, params: b.params, inputs: r.paths });
+    b.preview = pairs.length ? { pairs } : null;
+  } catch (e) {
+    b.preview = { err: String(e) };
+  }
+  if (state.bench === b) renderRows();
+}
+
 function rowView(r) {
   return h(
     "li",
@@ -337,6 +363,7 @@ function rowView(r) {
     h("span", { class: "st" }, rowStatus(r)),
     r.state === "running" && h("div", { class: r.pct == null ? "bar indet" : "bar", style: `--p:${r.pct ?? 0}` }, h("i")),
     r.state === "fail" && h("pre", { class: "err" }, r.err),
+    r.state === "queued" && previewView(),
     r.out.map((o) =>
       h("div", { class: "out" }, "→", h("span", { title: o }, base(o)), h("button", { type: "button", onclick: () => revealItemInDir(o) }, "show")),
     ),

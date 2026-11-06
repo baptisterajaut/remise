@@ -196,3 +196,18 @@ fn file_dates_are_local_time() {
     assert_eq!(at("60"), noon_utc - 3600, "Paris in winter: noon there is 11:00 UTC");
     assert_eq!(at("-300"), noon_utc + 5 * 3600, "New York: noon there is 17:00 UTC");
 }
+
+#[test]
+fn renames_can_be_previewed_before_running() {
+    let t = tools::find("batch-rename").unwrap();
+    let j = Job {
+        inputs: vec![PathBuf::from("/nowhere/a.JPG"), PathBuf::from("/nowhere/b.jpg")],
+        out: PathBuf::new(),
+        tmp: PathBuf::from("/tmp"),
+        params: tools::with_defaults(t, [("pattern".to_string(), "trip-{n}".to_string())].into()),
+    };
+    let pairs = tools::planned_renames(&j, (t.build)(&j)).unwrap();
+    assert_eq!(pairs, [("a.JPG".into(), "trip-01.JPG".into()), ("b.jpg".into(), "trip-02.jpg".into())]);
+    let bad = Job { params: tools::with_defaults(t, [("pattern".to_string(), "../x".to_string())].into()), ..j };
+    assert!(tools::planned_renames(&bad, (t.build)(&bad)).is_err(), "the refusal shows up in the preview");
+}

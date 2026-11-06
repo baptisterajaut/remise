@@ -78,7 +78,7 @@ Too big for every installer, so the tool's button offers the download, with its 
 These are deliberate shortcuts, marked `CBA:` in the code (`grep -rn CBA:`):
 
 - **Builds**: they are unsigned.
-- **Batch rename** has no live preview and no undo.
+- **Batch rename** has no undo; it shows every new name before you press Run.
 - **Stop** kills the program a job is running, not the ones that program started itself (LibreOffice's `soffice.bin`, yt-dlp's FFmpeg).
 - **Stamp** uses light tints instead of transparency, because `.setfillconstantalpha` errors out in Ghostscript 10.08.
 - **Sign** and **Crop margins** take page 1's size for every page; on a PDF that mixes page sizes, the others are approximate.

@@ -44,7 +44,7 @@ pub static TOOLS: &[Tool] = &[
             Param::Text { key: "start", label: "First number", default: "1", placeholder: "1" },
         ],
         output: Output::None,
-        // CBA: no live preview / undo, the patterns are simple enough to eyeball
+        // CBA: no undo; the bench previews every new name before Run
         build: |j| {
             let pattern = j.p("pattern");
             if pattern.contains(['/', '\\']) || pattern.contains("..") || pattern.trim().is_empty() {

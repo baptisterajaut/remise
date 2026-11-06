@@ -90,6 +90,19 @@ async fn run(app: AppHandle, job: String, steps: Vec<runner::StepReq>, inputs: V
     .map_err(|e| e.to_string())?
 }
 
+/// What Batch rename or Sort & route would do with these files, before it does it.
+#[tauri::command]
+fn preview(tool: String, params: HashMap<String, String>, inputs: Vec<String>) -> Result<Vec<(String, String)>, String> {
+    let t = tools::find(&tool).ok_or("unknown tool")?;
+    let job = tools::Job {
+        inputs: inputs.iter().map(PathBuf::from).collect(),
+        out: PathBuf::new(),
+        tmp: std::env::temp_dir(),
+        params: tools::with_defaults(t, params),
+    };
+    tools::planned_renames(&job, (t.build)(&job))
+}
+
 /// Stops a running job (the bench's Stop button).
 #[tauri::command]
 fn stop(job: String) {
@@ -136,7 +149,7 @@ pub fn run_app() {
             bins::set_user_tools(app.path().app_local_data_dir().ok().map(|d| d.join("tools")));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_tools, run, stop, downloads, download])
+        .invoke_handler(tauri::generate_handler![list_tools, run, stop, preview, downloads, download])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

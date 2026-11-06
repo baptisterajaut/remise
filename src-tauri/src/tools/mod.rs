@@ -357,6 +357,24 @@ pub fn parse_date(s: &str) -> Option<std::time::SystemTime> {
     Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
 }
 
+/// The `(file, new name)` pairs a file tool's steps would rename, for a preview before running:
+/// the name relative to the file's folder, so a move into a subfolder reads `Images/x.jpg`.
+pub fn planned_renames(job: &Job, steps: Vec<Step>) -> Result<Vec<(String, String)>, String> {
+    let mut out = Vec::new();
+    for step in steps {
+        match step {
+            Step::Fail(e) => return Err(e),
+            Step::Then(plan) => out.extend(planned_renames(job, plan(job)?)?),
+            Step::Rename(from, to) => {
+                let rel = from.parent().and_then(|dir| to.strip_prefix(dir).ok()).unwrap_or(&to).to_path_buf();
+                out.push((from.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), s(&rel)));
+            }
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
 /// Inputs split by kind for tools that take a mix (a PDF and a signature, a video and a logo…).
 fn pair(j: &Job, a: &[&str], b: &[&str], what: &str) -> Result<(String, String), Step> {
     match (j.pick(a), j.pick(b)) {

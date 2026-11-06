@@ -28,6 +28,10 @@ window.__TAURI__ = {
       if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129 } };
       if (cmd === "download") return window.__download(args);
       if (cmd === "stop") return window.__pending[args.job]?.("Stopped.");
+      if (cmd === "preview") {
+        if (args.params.pattern.includes("/")) throw "the pattern is a file name: no slashes, no ..";
+        return args.inputs.map((p, i) => [p.split("/").pop(), args.params.pattern.replace("{n}", String(i + 1).padStart(2, "0")) + ".jpg"]);
+      }
       return window.__run(args);
     },
   },
@@ -170,6 +174,17 @@ async function resetWall(page) {
   await page.getByRole("button", { name: /^Everything/ }).click();
 }
 
+async function previewFlow(page) {
+  await resetWall(page);
+  await page.getByRole("button", { name: /Batch rename/ }).click();
+  await page.evaluate(() => window.__drop(["/d/a.jpg", "/d/b.jpg"]));
+  await page.fill(".params input", "trip-{n}");
+  await page.waitForFunction(() => document.querySelector(".preview li")?.textContent === "a.jpg → trip-01.jpg");
+  await page.fill(".params input", "a/b");
+  await page.waitForSelector(".files .err");
+  assert.match(await page.locator(".files .err").textContent(), /no slashes/);
+}
+
 async function datesFlow(page) {
   await resetWall(page);
   await page.getByRole("button", { name: /Change file dates/ }).click();
@@ -212,6 +227,7 @@ for (const scheme of ["light", "dark"]) {
   await wallFlow(page, shot);
   await chainFlow(page, shot);
   await generatorFlow(page, shot);
+  await previewFlow(page);
   await datesFlow(page);
   await stopFlow(page);
   await downloadFlow(page, shot);
