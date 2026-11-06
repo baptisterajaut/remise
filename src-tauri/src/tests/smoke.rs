@@ -33,6 +33,7 @@ struct Fixtures {
     srt: PathBuf,
     html: PathBuf,
     epub: PathBuf,
+    csv: PathBuf,
     font: Option<PathBuf>,
 }
 
@@ -83,6 +84,7 @@ fn fixtures(test: &str) -> Fixtures {
         srt: f("clip.srt"),
         html: f("page.html"),
         epub: f("book.epub"),
+        csv: f("sheet.csv"),
         // Copied: the specimen lands next to its input, and system font dirs are read-only.
         font: system_font().map(|f| {
             let copy = dir.join(f.file_name().unwrap());
@@ -102,6 +104,7 @@ fn fixtures(test: &str) -> Fixtures {
     fs::write(&fx.srt, "1\n00:00:00,000 --> 00:00:02,000\nHello Remise\n").unwrap();
     fs::write(&fx.html, "<!doctype html><h1>Hello Remise</h1><p>Printed headless.</p>").unwrap();
     make_epub(&dir, &fx.epub);
+    fs::write(&fx.csv, "item,price\nbolt,0.10\nnut,0.05\n").unwrap();
     fx
 }
 
@@ -116,6 +119,7 @@ fn inputs_for<'a>(t: &tools::Tool, fx: &'a Fixtures) -> Option<Vec<&'a Path>> {
         "img-attach" => vec![&fx.png2, &fx.png],
         "aud-merge" => vec![&fx.wav, &fx.wav],
         "pdf-ebook" => vec![&fx.epub],
+        "pdf-office" => vec![&fx.csv],
         "pdf-html" | "create-html-image" => vec![&fx.html],
         "create-font" => vec![fx.font.as_deref()?],
         _ if t.inputs == Inputs::None => vec![],

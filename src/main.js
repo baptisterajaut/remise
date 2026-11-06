@@ -30,6 +30,7 @@ const PRODUCTS = {
   "yt-dlp": ["yt-dlp", "yt-dlp"],
   whisper: ["Whisper", null],
   "realesrgan-ncnn-vulkan": ["Real-ESRGAN", null],
+  soffice: ["LibreOffice", null],
 };
 /** Optional tools that don't come from a package manager. */
 const EXTRA_HINTS = {
@@ -37,6 +38,7 @@ const EXTRA_HINTS = {
   whisper: "pipx install openai-whisper",
   pdfcraft: "PdfCraft: github.com/storytold/pdfcraft",
   chromium: "Any of Google Chrome, Microsoft Edge or Chromium",
+  soffice: "LibreOffice: libreoffice.org/download",
   "realesrgan-ncnn-vulkan": "Real-ESRGAN: github.com/xinntao/Real-ESRGAN-ncnn-vulkan (unzip, keep models/ next to it)",
 };
 const product = (bin) => PRODUCTS[bin]?.[0] ?? bin;

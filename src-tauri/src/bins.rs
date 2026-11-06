@@ -50,6 +50,7 @@ fn search_dirs() -> Vec<PathBuf> {
     for app in ["Google Chrome", "Chromium", "Microsoft Edge"] {
         dirs.push(PathBuf::from(format!("/Applications/{app}.app/Contents/MacOS")));
     }
+    dirs.push(PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS"));
     // Windows installers for these don't touch PATH.
     for pf in ["ProgramFiles", "ProgramFiles(x86)"].iter().filter_map(std::env::var_os) {
         let pf = PathBuf::from(pf);
@@ -57,6 +58,7 @@ fn search_dirs() -> Vec<PathBuf> {
         dirs.push(pf.join("Tesseract-OCR"));
         dirs.push(pf.join("Microsoft/Edge/Application"));
         dirs.push(pf.join("Google/Chrome/Application"));
+        dirs.push(pf.join("LibreOffice/program"));
         if let Ok(rd) = fs::read_dir(pf.join("gs")) {
             dirs.extend(rd.flatten().map(|e| e.path().join("bin")));
         }

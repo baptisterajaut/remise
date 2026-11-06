@@ -105,3 +105,21 @@ fn bad_params_become_messages_not_commands() {
     assert!(matches!(&job("file-dates", &["/d/a"], &[("date", "soon")])[0], Step::Fail(_)));
     assert!(matches!(&job("vid-download", &[], &[("url", "file:///etc/passwd")])[0], Step::Fail(_)));
 }
+
+#[test]
+fn attach_to_each_puts_the_page_where_asked() {
+    let end = job("pdf-append", &["/d/terms.pdf", "/d/a.pdf"], &[]);
+    let Step::Run("qpdf", a) = &end[0] else { panic!("{end:?}") };
+    assert_eq!(a[..4], ["--empty", "--pages", "/d/a.pdf", "/d/terms.pdf"]);
+    let start = job("pdf-append", &["/d/cover.pdf", "/d/a.pdf"], &[("where", "start")]);
+    let Step::Run("qpdf", a) = &start[0] else { panic!("{start:?}") };
+    assert_eq!(a[2..4], ["/d/cover.pdf", "/d/a.pdf"]);
+    assert!(matches!(&job("pdf-append", &["/d/only.pdf"], &[])[0], Step::Fail(_)));
+}
+
+#[test]
+fn image_text_lets_tesseract_add_the_extension() {
+    let steps = job("img-text", &["/d/shot.png"], &[("lang", "fra")]);
+    let Step::Run("tesseract", a) = &steps[0] else { panic!("{steps:?}") };
+    assert_eq!(a, &["/d/shot.png", "/out/x", "-l", "fra", "txt"]);
+}

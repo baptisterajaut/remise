@@ -452,7 +452,7 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         id: "img-attach",
         family: Family::Image,
-        name: "Attach to each",
+        name: "Logo on each",
         blurb: "Drop a logo first, then photos: the logo lands on each one.",
         bins: &["magick"],
         accepts: IMG,
@@ -512,6 +512,19 @@ pub static TOOLS: &[Tool] = &[
                 args!["-i", j.input(), "-o", j.out(), "-s", "4", "-n", j.p("model"), "-m", "{bindir}/models"],
             )]
         },
+    },
+    Tool {
+        id: "img-text",
+        family: Family::Image,
+        name: "Extract text",
+        blurb: "Read the text out of a photo or screenshot (OCR).",
+        bins: &["tesseract"],
+        accepts: &["png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp"],
+        inputs: Inputs::One,
+        params: &[Param::Text { key: "lang", label: "Languages", default: "eng", placeholder: "eng+fra" }],
+        output: Output::File { suffix: "text", ext: |_| "txt".into() },
+        // Tesseract appends ".txt" to the output base itself.
+        build: |j| vec![Step::Run("tesseract", args![j.input(), s(&j.out.with_extension("")), "-l", j.p("lang"), "txt"])],
     },
 ];
 

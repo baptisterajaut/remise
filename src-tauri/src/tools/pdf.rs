@@ -554,6 +554,79 @@ pub static TOOLS: &[Tool] = &[
         output: Output::File { suffix: "print", ext: |_| "pdf".into() },
         build: |j| vec![chromium(j, j.input(), args!["--no-pdf-header-footer", format!("--print-to-pdf={}", j.out())])],
     },
+    Tool {
+        id: "pdf-append",
+        family: Family::Pdf,
+        name: "Attach to each",
+        blurb: "Drop a cover or terms page first, then PDFs: it's added to every one.",
+        bins: &["qpdf"],
+        accepts: PDF,
+        inputs: Inputs::Many,
+        params: &[Param::Select {
+            key: "where",
+            label: "Put it",
+            options: &[("end", "At the end"), ("start", "At the start")],
+            default: "end",
+        }],
+        output: Output::Dir("attached"),
+        build: |j| {
+            let Some((extra, docs)) = j.inputs.split_first().filter(|(_, rest)| !rest.is_empty()) else {
+                return vec![Step::Fail("drop the page to attach first, then one or more PDFs".into())];
+            };
+            docs.iter()
+                .map(|d| {
+                    let (a, b) = if j.p("where") == "start" { (s(extra), s(d)) } else { (s(d), s(extra)) };
+                    let name = d.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    Step::Run("qpdf", args!["--empty", "--pages", a, b, "--", s(&j.out.join(name))])
+                })
+                .collect()
+        },
+    },
+    Tool {
+        id: "pdf-flatten",
+        family: Family::Pdf,
+        name: "Flatten PDF",
+        blurb: "Bake form fields and annotations into the page.",
+        bins: &["qpdf"],
+        accepts: PDF,
+        inputs: Inputs::One,
+        params: &[],
+        output: Output::File { suffix: "flat", ext: |_| "pdf".into() },
+        build: |j| {
+            vec![Step::Run("qpdf", args!["--generate-appearances", "--flatten-annotations=all", j.input(), j.out()])]
+        },
+    },
+    Tool {
+        id: "pdf-repair",
+        family: Family::Pdf,
+        name: "Repair PDF",
+        blurb: "Rebuild a damaged PDF so it opens cleanly again.",
+        bins: &["gs"],
+        accepts: PDF,
+        inputs: Inputs::One,
+        params: &[],
+        output: Output::File { suffix: "repaired", ext: |_| "pdf".into() },
+        // Ghostscript re-renders every page into a fresh file, which survives far worse damage than a qpdf rewrite.
+        build: |j| vec![Step::Run("gs", args!["-sDEVICE=pdfwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", gs_out(&j.out()), j.input()])],
+    },
+    Tool {
+        id: "pdf-office",
+        family: Family::Pdf,
+        name: "Office to PDF",
+        blurb: "Word, Excel, PowerPoint and LibreOffice files to PDF (needs LibreOffice).",
+        bins: &["soffice"],
+        accepts: &["doc", "docx", "odt", "rtf", "xls", "xlsx", "ods", "csv", "ppt", "pptx", "odp"],
+        inputs: Inputs::One,
+        params: &[],
+        output: Output::File { suffix: "office", ext: |_| "pdf".into() },
+        build: |j| {
+            let profile = format!("-env:UserInstallation=file:///{}", j.tmp("lo").replace('\\', "/").replace(' ', "%20").trim_start_matches('/'));
+            vec![
+                Step::Run("soffice", args![profile, "--headless", "--convert-to", "pdf", "--outdir", s(&j.tmp), j.input()]),
+                Step::Rename(j.tmp.join(format!("{}.pdf", j.stem())), j.out.clone()),
+            ]
+        },
+    },
 ];
 
 /// Pages of plain text (gs txtwrite keeps the layout with runs of spaces) → Markdown.
