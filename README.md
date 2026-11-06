@@ -8,11 +8,12 @@ Remise is a thin, honest wrapper around the classics: Ghostscript, qpdf, Tessera
 
 ## What's on the wall
 
-There are 89 tools.
+There are 95 tools.
 
 | Family | Tools |
 |---|---|
 | **PDF** (27) | Compress, Merge, Split, Extract pages, Organize pages (reorder/drop), Attach to each (a cover or terms page added to every PDF), Flatten, Repair, Office to PDF (LibreOffice), Rotate pages, OCR (PDFs and photos → searchable PDF), PDF to images, Images to PDF, Extract text, PDF to Markdown, Grayscale, Encrypt (AES-256), Unlock, Optimize for web, Redact (flattened, so nothing stays under the black boxes), Sign (stamps a signature image), Crop margins, Page numbers, Stamp (DRAFT, PAID…), Ebook (EPUB) to PDF, HTML to PDF, **PDF Studio** (opens the file in [PdfCraft](https://github.com/storytold/pdfcraft) to annotate, sign, redact and reorder) |
+| **Docs** (6) | Convert document (Word, OpenDocument, PDF, web page, EPUB, RTF, text), To Markdown (images extracted to `media/`), Markdown to PDF (typeset by Typst, no LaTeX), Markdown to Word, Markdown to slides (PowerPoint), PDF to Ebook (EPUB) |
 | **Image** (21) | Convert (WebP/AVIF/PNG/JPG/TIFF/GIF), Compress, Resize, Crop to ratio, Rotate & flip, Auto-crop borders, Strip metadata, Extract text (OCR), Redact (black box or pixelate), SEO image (WebP, ≤1600 px, slug name), Compare (side by side or differences), Logo on each, Remove background (rembg), Vectorize to SVG, Stylize, Watermark, Upscale, AI Upscale (Real-ESRGAN), Icon pack (.ico), Color palette, Contact sheet |
 | **Video** (19) | Compress (H.264), Convert, Video to GIF, Trim, Split, Crop to ratio, Resize, Rotate, Change speed, Mute, Extract audio, Add audio (replace or mix), Join, Insert clip, Watermark (logo), Caption (burn in an .srt), Transcribe (Whisper → SRT/VTT/text), Extract frames, Video downloader (yt-dlp) |
 | **Audio** (9) | Convert, Compress, Trim, Split, Merge, Volume & normalize (−16 LUFS), Speed, Waveform image, Audiogram (audio → video with a live waveform) |
@@ -23,7 +24,6 @@ Some tools need an optional install. They show up hatched on the wall until it's
 - **rembg** for background removal.
 - **Real-ESRGAN** for AI upscale.
 - **Whisper** for transcription.
-- **yt-dlp** for the video downloader.
 - **PdfCraft** for PDF Studio.
 - **LibreOffice** for Office to PDF.
 - **Chrome, Edge or Chromium** for HTML/EPUB rendering. Edge ships with every Windows.
@@ -46,12 +46,14 @@ Releases come in four builds: Windows x64 (NSIS installer), macOS Apple Silicon 
 
 | | Windows | macOS | Linux AppImage |
 |---|---|---|---|
-| FFmpeg, qpdf, 7-Zip | bundled | bundled | bundled |
+| FFmpeg, qpdf, 7-Zip, Pandoc, Typst, yt-dlp (+ QuickJS) | bundled | bundled | bundled |
 | Potrace | bundled | bundled (Intel), install on Apple Silicon | bundled |
 | Ghostscript, Tesseract, ImageMagick | bundled | `brew install ghostscript tesseract imagemagick` | from your distro |
-| rembg, PdfCraft (optional) | install separately | install separately | install separately |
+| rembg, Whisper, Real-ESRGAN, LibreOffice, PdfCraft (optional) | install separately | install separately | install separately |
 
-The app looks for bundled binaries first, then for ones you have installed. A tool whose binary is missing shows up hatched on the wall, with the install command in its tooltip.
+The app looks for bundled binaries first, then for ones you have installed.
+
+**yt-dlp stays current.** Sites change every week, and a yt-dlp frozen inside a read-only app would soon stop working. On first use, the bundled copy is copied to your user data folder. Before each download it runs `yt-dlp -U` there; if that fails (offline, or a distro-packaged yt-dlp), it carries on with the version it has. QuickJS is bundled because YouTube now needs a JavaScript runtime. A tool whose binary is missing shows up hatched on the wall, with the install command in its tooltip.
 
 The builds are not code-signed yet. On macOS, right-click the app and choose **Open** the first time. If a bundled tool is still blocked, run `xattr -dr com.apple.quarantine /Applications/Remise.app`. On Windows, choose **More info → Run anyway** in SmartScreen.
 
@@ -88,7 +90,7 @@ CI runs lint and unit tests on all three OSes, then the smoke test on each one a
 
 ## Coverage of Hangar's tool list
 
-Remise was built clean-room, using only Hangar's public website as a guide. Their tools page (`hangar.tools/tools/`) shows 89 cards: 77 shipped and 12 marked *soon*. **Every one of the 77 shipped tools has a counterpart here.** Three of the *soon* ones (Flatten, Repair, Office to PDF) are already in Remise.
+Remise was built clean-room, using only Hangar's public website as a guide. Their tools page (`hangar.tools/tools/`) shows 89 cards: 77 shipped and 12 marked *soon*. **Every one of the 77 shipped tools has a counterpart here.** Four of the *soon* ones (Flatten, Repair, Office to PDF, PDF to Ebook) are already in Remise.
 
 To replay the check against their live page:
 
@@ -96,7 +98,7 @@ To replay the check against their live page:
 REMISE_MANIFEST=$PWD/src-tauri/target/manifest.json cargo test --manifest-path src-tauri/Cargo.toml -- --ignored manifest
 python3 scripts/coverage.py src-tauri/target/manifest.json
 # hangar.tools: 77 shipped, 12 marked soon
-# remise: 89 tools, covers 77/77 shipped
+# remise: 95 tools, covers 77/77 shipped
 ```
 
 The mapping from their tool ids to ours lives in `scripts/coverage.py`. Where the two differ in depth:
@@ -104,7 +106,7 @@ The mapping from their tool ids to ours lives in `scripts/coverage.py`. Where th
 - **Sign** places a signature image; it is not a cryptographic signature.
 - **Ebook to PDF** reads EPUB only.
 - **Fonts** produces a specimen sheet.
-- **Remove background, AI Upscale, Transcribe and Video downloader** need an optional install (rembg, Real-ESRGAN, Whisper, yt-dlp).
+- **Remove background, AI Upscale and Transcribe** need an optional install (rembg, Real-ESRGAN, Whisper).
 - **HTML and EPUB rendering** uses the Chrome, Edge or Chromium already on the machine.
 
 Remise also has tools that their list doesn't: Grayscale PDF, Optimize for web, PDF Studio (via PdfCraft), Auto-crop borders, non-AI Upscale, Extract frames, Waveform image, and Chains.

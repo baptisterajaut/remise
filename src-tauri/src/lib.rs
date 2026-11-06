@@ -92,6 +92,7 @@ pub fn run_app() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             bins::set_vendor(app.path().resource_dir().ok().map(|d| d.join("vendor")));
+            bins::set_user_tools(app.path().app_local_data_dir().ok().map(|d| d.join("tools")));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![list_tools, run])

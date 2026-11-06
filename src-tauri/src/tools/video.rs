@@ -507,10 +507,32 @@ pub static TOOLS: &[Tool] = &[
                 return vec![Step::Fail("paste a link starting with https://".into())];
             }
             let template = format!("{}/%(title).80s.%(ext)s", s(&j.out).replace('%', "%%"));
-            vec![Step::Run("yt-dlp", args!["--no-playlist", "-f", j.p("quality"), "-o", template, "--", url])]
+            vec![
+                Step::Then(fresh_ytdlp),
+                // QuickJS (bundled) runs YouTube's player code; deno/node are used instead if present.
+                Step::Run(
+                    "yt-dlp",
+                    args!["--no-playlist", "--js-runtimes", "quickjs", "-f", j.p("quality"), "-o", template, "--", url],
+                ),
+            ]
         },
     },
 ];
+
+/// Sites change weekly and the bundled yt-dlp is frozen at build time, inside a read-only app.
+/// First use copies it to the per-user tools dir, where `-U` can replace it; every run then tries
+/// an update and carries on with whatever it has if that fails (offline, distro-packaged yt-dlp).
+fn fresh_ytdlp(_: &Job) -> Result<Vec<Step>, String> {
+    let mut steps = Vec::new();
+    if let (Some(current), Some(user)) = (crate::bins::which("yt-dlp"), crate::bins::user_tools())
+        && crate::bins::is_bundled(&current)
+    {
+        let name = current.file_name().ok_or("odd yt-dlp path")?;
+        steps.push(Step::Copy(current.clone(), user.join("yt-dlp").join(name)));
+    }
+    steps.push(Step::Try(Box::new(Step::Run("yt-dlp", args!["-U"]))));
+    Ok(steps)
+}
 
 /// Equal-length parts with the segment muxer, stream copy.
 pub fn segment(j: &Job) -> Step {

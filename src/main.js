@@ -7,6 +7,7 @@ const { revealItemInDir } = window.__TAURI__.opener;
 const FAMILIES = [
   ["all", "Everything", "var(--ink)"],
   ["pdf", "PDF", "var(--pdf)"],
+  ["docs", "Docs", "var(--docs)"],
   ["image", "Image", "var(--image)"],
   ["video", "Video", "var(--video)"],
   ["audio", "Audio", "var(--audio)"],
@@ -31,6 +32,8 @@ const PRODUCTS = {
   whisper: ["Whisper", null],
   "realesrgan-ncnn-vulkan": ["Real-ESRGAN", null],
   soffice: ["LibreOffice", null],
+  pandoc: ["Pandoc", "pandoc"],
+  typst: ["Typst", "typst"],
 };
 /** Optional tools that don't come from a package manager. */
 const EXTRA_HINTS = {

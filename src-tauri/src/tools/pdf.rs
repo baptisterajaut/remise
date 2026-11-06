@@ -521,12 +521,7 @@ pub static TOOLS: &[Tool] = &[
         build: |j| {
             vec![
                 Step::Run("gs", args!["-sDEVICE=txtwrite", "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dPDFSTOPONERROR", gs_out(&j.tmp("page-%04d.txt")), j.input()]),
-                Step::Then(|j| {
-                    let mut pages: Vec<_> = std::fs::read_dir(&j.tmp).map_err(|e| e.to_string())?.flatten().map(|e| e.path()).filter(|p| ext_of(p) == "txt").collect();
-                    pages.sort();
-                    let texts = pages.iter().map(|p| std::fs::read_to_string(p).map_err(|e| e.to_string())).collect::<Result<Vec<_>, _>>()?;
-                    Ok(vec![Step::Write(j.out.clone(), to_markdown(&j.stem(), &texts))])
-                }),
+                Step::Then(|j| Ok(vec![Step::Write(j.out.clone(), to_markdown(&j.stem(), &text_pages(j)?))])),
             ]
         },
     },
@@ -628,6 +623,18 @@ pub static TOOLS: &[Tool] = &[
         },
     },
 ];
+
+/// The `page-NNNN.txt` files gs txtwrite left in tmp, in page order.
+pub fn text_pages(j: &Job) -> Result<Vec<String>, String> {
+    let mut pages: Vec<_> = std::fs::read_dir(&j.tmp)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| ext_of(p) == "txt")
+        .collect();
+    pages.sort();
+    pages.iter().map(|p| std::fs::read_to_string(p).map_err(|e| e.to_string())).collect()
+}
 
 /// Pages of plain text (gs txtwrite keeps the layout with runs of spaces) → Markdown.
 pub fn to_markdown(title: &str, pages: &[String]) -> String {

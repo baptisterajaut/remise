@@ -138,3 +138,25 @@ fn image_text_lets_tesseract_add_the_extension() {
     let Step::Run("tesseract", a) = &steps[0] else { panic!("{steps:?}") };
     assert_eq!(a, &["/d/shot.png", "/out/x", "-l", "fra", "txt"]);
 }
+
+#[test]
+fn pandoc_typesets_pdf_with_typst_and_keeps_markdown_images_relative() {
+    let pdf = {
+        let t = tools::find("doc-convert").unwrap();
+        let j = Job {
+            inputs: vec![PathBuf::from("/d/notes/a.docx")],
+            out: PathBuf::from("/out/a.converted.pdf"),
+            tmp: PathBuf::from("/tmp/job"),
+            params: tools::with_defaults(t, [("format".to_string(), "pdf".to_string())].into()),
+        };
+        (t.build)(&j)
+    };
+    let Step::Run("pandoc", a) = &pdf[0] else { panic!("{pdf:?}") };
+    assert!(a.contains(&"--pdf-engine=typst".to_string()));
+    assert!(a.contains(&format!("--resource-path={}", tools::s(std::path::Path::new("/d/notes")))));
+
+    let md = job("doc-to-markdown", &["/d/a.docx"], &[]);
+    let Step::RunIn(dir, "pandoc", a) = &md[0] else { panic!("{md:?}") };
+    assert_eq!(dir, &PathBuf::from("/out/x"));
+    assert!(a.contains(&"--extract-media=media".to_string()) && a.contains(&"a.md".to_string()));
+}

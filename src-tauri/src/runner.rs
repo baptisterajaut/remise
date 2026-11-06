@@ -102,12 +102,15 @@ fn drain_stdout(stdout: ChildStdout, on_progress: impl Fn(f64)) -> String {
 
 /// Runs one binary to completion. ffmpeg gets a real progress percentage.
 // CBA: no cancel; keeping the Child in a job table + a `cancel` command if long video jobs need it
-fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String]) -> Result<(), String> {
+fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>) -> Result<(), String> {
     let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
     // `{bindir}`: data that ships next to a tool's binary (Real-ESRGAN models).
     let bindir = path.parent().map(tools::s).unwrap_or_default();
     let args: Vec<String> = args.iter().map(|a| a.replace("{bindir}", &bindir)).collect();
     let mut cmd = command(&path);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
     if bin == "ffmpeg" {
         cmd.args(["-progress", "pipe:1", "-nostats"]);
     }
@@ -173,11 +176,21 @@ fn rename(from: &Path, to: &Path) -> Result<(), String> {
 
 fn run_step(emit: Emit, p: &Progress, job: &Job, step: Step, produced: &mut Vec<PathBuf>) -> Result<(), String> {
     match step {
-        Step::Run(bin, args) => exec(emit, p, bin, &args),
+        Step::Run(bin, args) => exec(emit, p, bin, &args, None),
+        Step::RunIn(dir, bin, args) => exec(emit, p, bin, &args, Some(&dir)),
         Step::Capture { bin, args, into } => capture(bin, &args, &into),
         Step::Then(next) => next(job)?.into_iter().try_for_each(|s| run_step(emit, p, job, s, produced)),
         Step::Fail(msg) => Err(msg),
-        Step::Copy(from, to) => fs::copy(&from, &to).map(|_| ()).map_err(|e| format!("{}: {e}", from.display())),
+        Step::Try(step) => {
+            let _ = run_step(emit, p, job, *step, produced);
+            Ok(())
+        }
+        Step::Copy(from, to) => {
+            if let Some(dir) = to.parent() {
+                fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            }
+            fs::copy(&from, &to).map(|_| ()).map_err(|e| format!("{}: {e}", from.display()))
+        }
         Step::Touch(path, when) => {
             touch(&path, when)?;
             produced.push(path);

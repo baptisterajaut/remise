@@ -37,9 +37,10 @@ class Item:
     source: str  # where the corresponding source lives
     url: str
     sha256: str
-    # (glob inside the unpacked download, destination dir under vendor/). A leading "?"
-    # marks the pick optional (licence files whose name varies between releases).
+    # (glob inside the unpacked download, destination dir under vendor/[, new file name]).
+    # A leading "?" marks the pick optional (licence files whose name varies between releases).
     picks: list = field(default_factory=list)
+    raw: bool = False  # a bare executable, not an archive or installer
 
 
 GS = dict(
@@ -62,7 +63,33 @@ POTRACE = dict(
     license="GPL-2.0-or-later",
     source="https://potrace.sourceforge.net/download/1.16/potrace-1.16.tar.gz",
 )
+PANDOC = dict(name="Pandoc", version="3.12.1", license="GPL-2.0-or-later",
+              source=f"{GH}/jgm/pandoc/archive/refs/tags/3.12.1.tar.gz")
+TYPST = dict(name="Typst", version="0.15.1", license="Apache-2.0", source=f"{GH}/typst/typst/archive/refs/tags/v0.15.1.tar.gz")
+YTDLP = dict(name="yt-dlp", version="2026.10.21",
+             license="Unlicense (the standalone build bundles Python and its dependencies under their own licences)",
+             source=f"{GH}/yt-dlp/yt-dlp/archive/refs/tags/2026.10.21.tar.gz")
+QJS = dict(name="QuickJS-NG", version="0.17.0", license="MIT",
+           source=f"{GH}/quickjs-ng/quickjs/archive/refs/tags/v0.17.0.tar.gz")
 TESSDATA = "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0"
+
+
+def documents(pandoc, typst, ytdlp, qjs):
+    """Pandoc + Typst (documents, Markdown → PDF) and yt-dlp + QuickJS (downloads), per platform.
+    Each argument is (asset name, sha256)."""
+    rel = lambda repo, tag, asset: f"{GH}/{repo}/releases/download/{tag}/{asset}"
+    exe = ".exe" if pandoc[0].endswith(".zip") and "windows" in pandoc[0] else ""
+    return [
+        Item(**PANDOC, url=rel("jgm/pandoc", "3.12.1", pandoc[0]), sha256=pandoc[1],
+             picks=[(f"**/pandoc{exe}", "pandoc")] if exe else [("**/bin/pandoc", "pandoc")]),
+        Item(**TYPST, url=rel("typst/typst", "v0.15.1", typst[0]), sha256=typst[1],
+             picks=[(f"**/typst{exe}", "typst"), ("?**/LICENSE", "licenses/typst"), ("?**/NOTICE", "licenses/typst")]),
+        Item(**YTDLP, url=rel("yt-dlp/yt-dlp", "2026.10.21", ytdlp[0]), sha256=ytdlp[1],
+             picks=[(ytdlp[0], "yt-dlp", f"yt-dlp{exe}")], raw=True),
+        # yt-dlp needs a JavaScript runtime for YouTube; QuickJS is the 2 MB one it supports.
+        Item(**QJS, url=rel("quickjs-ng/quickjs", "v0.17.0", qjs[0]), sha256=qjs[1],
+             picks=[(qjs[0], "quickjs", f"qjs{exe}")], raw=True),
+    ]
 
 
 def tessdata(lang, sha):
@@ -124,19 +151,36 @@ PLATFORMS = {
         Item(**POTRACE, url="https://potrace.sourceforge.net/download/1.16/potrace-1.16.win64.zip",
              sha256="63699f9885b5ed053977fd94452a7bdbb77ee62b77bf28a3f17b2f14b9b9c65d",
              picks=[("**/potrace.exe", "potrace"), ("**/COPYING", "licenses/potrace")]),
-    ],
+    ] + documents(
+        ("pandoc-3.12.1-windows-x86_64.zip", "6ef431cb20b2c24a0371fc19200dc49d452be54b1b5c9239f3462841ef53e587"),
+        ("typst-x86_64-pc-windows-msvc.zip", "19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736"),
+        ("yt-dlp.exe", "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555"),
+        ("qjs-windows-x86_64.exe", "2aeabf0092c3262d6b2609824418f7dd7ed1f1df939f73b2b15645230cac0d77"),
+    ),
     # CBA: Ghostscript, Tesseract and ImageMagick have no relocatable macOS build upstream;
     # bundling them means brew + dylibbundler + inside-out re-signing per arch. Until then the
     # app greys those tools out with an install hint.
     "macos-arm64": macos("arm64", "arm64/1789931890_9.0.2",
                          "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
-                         "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79"),
+                         "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79")
+    + documents(
+        ("pandoc-3.12.1-arm64-macOS.zip", "c2146cf33a583f3ac93eccddf1bb662371d5cfcce1aad1c87ad860cca1435d46"),
+        ("typst-aarch64-apple-darwin.tar.xz", "48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a"),
+        ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
+        ("qjs-darwin-arm64", "8be3ddfe3397d2e692e4e1e8972ee9d032a0a580505d2f8b4ea528cf1b651c11"),
+    ),
     "macos-x64": macos("x64", "amd64/1789931006_9.0.2",
                        "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4",
                        "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481")
     + [Item(**POTRACE, url="https://potrace.sourceforge.net/download/1.16/potrace-1.16.mac-x86_64.tar.gz",
             sha256="7b144720c1cdf5f7d73e47e9e9a5df03ee49bcc42037498481d3a29855311940",
-            picks=[("**/potrace", "potrace"), ("**/COPYING", "licenses/potrace")])],
+            picks=[("**/potrace", "potrace"), ("**/COPYING", "licenses/potrace")])]
+    + documents(
+        ("pandoc-3.12.1-x86_64-macOS.zip", "81ed3e2cfecf096df15d407152f89a684fd65221082b919963f738e977fad3bc"),
+        ("typst-x86_64-apple-darwin.tar.xz", "7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa"),
+        ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
+        ("qjs-darwin-x86_64", "9e5e101b4fd13cda3204222ca9f8be35412c41dcdef3745829633b7a67245412"),
+    ),
     # AppImage. BtbN keeps month-end autobuilds, so this tag doesn't vanish like the dailies.
     "linux-x64": [
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
@@ -152,7 +196,12 @@ PLATFORMS = {
         Item(**POTRACE, url="https://potrace.sourceforge.net/download/1.16/potrace-1.16.linux-x86_64.tar.gz",
              sha256="158ef1cb6bde9f057510c7aa8b555117be10fa5318cd875f6a26a5811dadc2d8",
              picks=[("**/potrace", "potrace"), ("**/COPYING", "licenses/potrace")]),
-    ],
+    ] + documents(
+        ("pandoc-3.12.1-linux-amd64.tar.gz", "d0c90410e90204c9ca83b8539fac5c7aed01fd537207e4585849f8abc5df20b8"),
+        ("typst-x86_64-unknown-linux-musl.tar.xz", "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c"),
+        ("yt-dlp_linux", "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f"),
+        ("qjs-linux-x86_64", "0bfc02511a9f549c28b53880d988fc7cd5d361e90c5e8afdfcd7dc6774ceace5"),
+    ),
 }
 
 
@@ -198,15 +247,18 @@ def install(item):
     archive = fetch(item)
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        unpack(archive, tmp)
-        for pattern, dest in item.picks:
+        if item.raw:
+            shutil.copy(archive, tmp / archive.name.split("-", 1)[1])
+        else:
+            unpack(archive, tmp)
+        for pattern, dest, *rename in item.picks:
             optional = pattern.startswith("?")
             hits = [p for p in tmp.glob(pattern.lstrip("?")) if p.is_file()]
             if not hits and not optional:
                 sys.exit(f"{item.name}: nothing matches {pattern} in {archive.name}")
             (OUT / dest).mkdir(parents=True, exist_ok=True)
             for hit in hits:
-                target = OUT / dest / hit.name
+                target = OUT / dest / (rename[0] if rename else hit.name)
                 shutil.copy2(hit, target)
                 target.chmod(0o755)
 

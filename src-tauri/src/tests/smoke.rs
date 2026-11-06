@@ -34,6 +34,8 @@ struct Fixtures {
     html: PathBuf,
     epub: PathBuf,
     csv: PathBuf,
+    md: PathBuf,
+    docx: PathBuf,
     font: Option<PathBuf>,
 }
 
@@ -85,6 +87,8 @@ fn fixtures(test: &str) -> Fixtures {
         html: f("page.html"),
         epub: f("book.epub"),
         csv: f("sheet.csv"),
+        md: f("notes.md"),
+        docx: f("letter.docx"),
         // Copied: the specimen lands next to its input, and system font dirs are read-only.
         font: system_font().map(|f| {
             let copy = dir.join(f.file_name().unwrap());
@@ -105,6 +109,10 @@ fn fixtures(test: &str) -> Fixtures {
     fs::write(&fx.html, "<!doctype html><h1>Hello Remise</h1><p>Printed headless.</p>").unwrap();
     make_epub(&dir, &fx.epub);
     fs::write(&fx.csv, "item,price\nbolt,0.10\nnut,0.05\n").unwrap();
+    fs::write(&fx.md, "# Remise notes\n\nHello **world**, ça marche.\n\n- one\n- two\n\n| tool | price |\n|---|---|\n| Remise | 0 € |\n\n![gradient](b.png)\n\n# Second\n\nMore.\n").unwrap();
+    // A real .docx with an image, made by pandoc itself from the Markdown above.
+    let resources = format!("--resource-path={}", p(&dir));
+    sh("pandoc", &[&p(&fx.md), &resources, "-o", &p(&fx.docx)]);
     fx
 }
 
@@ -120,6 +128,8 @@ fn inputs_for<'a>(t: &tools::Tool, fx: &'a Fixtures) -> Option<Vec<&'a Path>> {
         "aud-merge" => vec![&fx.wav, &fx.wav],
         "pdf-ebook" => vec![&fx.epub],
         "pdf-office" => vec![&fx.csv],
+        "doc-convert" | "doc-to-markdown" => vec![&fx.docx],
+        "doc-md-pdf" | "doc-md-docx" | "doc-md-slides" => vec![&fx.md],
         "pdf-html" | "create-html-image" => vec![&fx.html],
         "create-font" => vec![fx.font.as_deref()?],
         _ if t.inputs == Inputs::None => vec![],
@@ -189,6 +199,9 @@ fn smoke_every_tool() {
     check("create-mockup", &[&fx.png], &[("device", "phone")]);
     check("create-qr", &[], &[("text", "hello"), ("format", "png")]);
     check("create-gradient", &[], &[("kind", "radial")]);
+    for format in ["pdf", "html", "txt", "epub", "odt"] {
+        check("doc-convert", &[&fx.docx], &[("format", format)]);
+    }
     for src in ["mandelbrot", "life=ratio=0.2:mold=8:life_color=#f2a33a:death_color=#3a1d0a", "cellauto=rule=110"] {
         check("create-shader", &[], &[("src", src), ("format", "png"), ("size", "1080x1080")]);
     }

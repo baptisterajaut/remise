@@ -39,6 +39,7 @@ MAP = {
     "pdf.split": "pdf-split", "pdf.stamp": "pdf-stamp", "pdf.to_images": "pdf-to-images",
     "pdf.to_markdown": "pdf-markdown", "pdf.unlock": "pdf-unlock",
     "pdf.flatten": "pdf-flatten", "pdf.repair": "pdf-repair", "pdf.office": "pdf-office",
+    "pdf.to_ebook": "doc-pdf-ebook",
     "video.add_audio": "vid-add-audio", "video.caption": "vid-caption", "video.compress": "vid-compress",
     "video.convert": "vid-convert", "video.crop": "vid-crop", "video.download": "vid-download",
     "video.insert_clips": "vid-insert", "video.join": "vid-join", "video.mute": "vid-mute",

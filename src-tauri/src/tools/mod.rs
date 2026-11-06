@@ -15,6 +15,7 @@ pub enum Family {
     Audio,
     Files,
     Create,
+    Docs,
 }
 
 #[derive(Serialize, Debug)]
@@ -84,6 +85,8 @@ pub struct Tool {
 #[derive(Debug)]
 pub enum Step {
     Run(&'static str, Vec<String>),
+    /// Same, from inside `dir` (tools that write relative paths, like Pandoc's extracted media).
+    RunIn(PathBuf, &'static str, Vec<String>),
     /// Write the sorted list of `dir/*.ext` paths, one per line, to `out`.
     ListDir { dir: PathBuf, ext: &'static str, out: PathBuf },
     Write(PathBuf, String),
@@ -99,6 +102,8 @@ pub enum Step {
     /// Stop with a message for the user (wrong mix of inputs and such).
     Fail(String),
     Copy(PathBuf, PathBuf),
+    /// Run a step and carry on whatever happens (best-effort updates).
+    Try(Box<Step>),
 }
 
 pub struct Job {
@@ -220,6 +225,7 @@ const TRIM: &[Param] = &[
 
 mod audio;
 pub mod create;
+pub mod docs;
 pub mod epub;
 pub mod files;
 pub mod image;
@@ -228,7 +234,7 @@ mod video;
 
 /// Every tool, in wall order.
 pub fn all() -> impl Iterator<Item = &'static Tool> {
-    [pdf::TOOLS, image::TOOLS, video::TOOLS, audio::TOOLS, create::TOOLS, files::TOOLS].into_iter().flatten()
+    [pdf::TOOLS, docs::TOOLS, image::TOOLS, video::TOOLS, audio::TOOLS, create::TOOLS, files::TOOLS].into_iter().flatten()
 }
 
 pub fn find(id: &str) -> Option<&'static Tool> {
