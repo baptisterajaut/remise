@@ -10,7 +10,7 @@ To replay the check against their live page:
 REMISE_MANIFEST=$PWD/src-tauri/target/manifest.json cargo test --manifest-path src-tauri/Cargo.toml -- --ignored manifest
 python3 scripts/coverage.py src-tauri/target/manifest.json
 # hangar.tools: 77 shipped, 12 marked soon
-# remise: 99 tools, covers 77/77 shipped
+# remise: 100 tools, covers 77/77 shipped
 ```
 
 The mapping from their tool ids to ours lives in `scripts/coverage.py`. In a few places the two differ in depth:
@@ -22,4 +22,4 @@ The mapping from their tool ids to ours lives in `scripts/coverage.py`. In a few
 - **Remove background and Transcribe** need an optional install (rembg, Whisper). AI Upscale is bundled: waifu2x, which also runs on the CPU.
 - **HTML rendering** uses the Chrome, Edge or Chromium already on the machine.
 
-Remise also has tools that their list doesn't: Grayscale PDF, Optimize for web, PDF Studio (via PdfCraft), Auto-crop borders, non-AI Upscale, Extract frames, Waveform image, the Docs family through Pandoc, and Chains.
+Remise also has tools that their list doesn't: Grayscale PDF, Optimize for web, PDF Studio and PDF to Office (via PdfCraft), Auto-crop borders, non-AI Upscale, Extract frames, Waveform image, the Docs family through Pandoc, and Chains.

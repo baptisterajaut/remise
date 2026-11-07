@@ -20,6 +20,7 @@ fn model(dir: &Path, body: &[u8], sha: Option<&str>) -> Download {
     let real = Sha256::digest(body).iter().map(|b| format!("{b:02x}")).collect::<String>();
     Download {
         bin: "test-model",
+        dir: "test-model",
         name: "the test model",
         url: file_url(&src),
         sha256: leak(sha.map(String::from).unwrap_or(real)),
@@ -84,6 +85,7 @@ fn an_archive_is_unpacked_and_its_program_found() {
     let body = fs::read(dir.join("pkg.tar.gz")).unwrap();
     let d = Download {
         bin: "test-tool",
+        dir: "test-tool",
         name: "the test tool",
         url: file_url(&dir.join("pkg.tar.gz")),
         sha256: leak(Sha256::digest(&body).iter().map(|b| format!("{b:02x}")).collect()),
@@ -112,9 +114,17 @@ fn skipped_links_alone_are_not_a_failure() {
 /// A typo in a pin only shows up as "checksum mismatch" on the user's first download.
 #[test]
 fn every_pin_is_a_sha256() {
-    for bin in ["chromium", "pdfcraft", "soffice", "yt-dlp", "bg-model", "whisper-model"] {
+    for bin in ["chromium", "pdfcraft", "pdfcraft-cli", "soffice", "yt-dlp", "bg-model", "whisper-model"] {
         let Some(d) = crate::fetch::find(bin) else { continue };
         assert!(d.sha256.len() == 64 && d.sha256.bytes().all(|b| b.is_ascii_hexdigit()), "{bin}: {}", d.sha256);
         assert!(d.url.starts_with("https://") && d.bytes > 0, "{bin}");
     }
+}
+
+/// On Linux and Windows the editor's archive has the command line too: one folder, one download.
+#[test]
+fn pdfcraft_and_its_command_line_share_a_download_where_they_can() {
+    let (Some(editor), Some(cli)) = (crate::fetch::find("pdfcraft"), crate::fetch::find("pdfcraft-cli")) else { return };
+    assert_eq!(editor.url == cli.url, editor.dir == cli.dir);
+    assert_eq!(editor.url == cli.url, !cfg!(target_os = "macos"));
 }

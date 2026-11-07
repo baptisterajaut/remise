@@ -1,6 +1,6 @@
 # remise.
 
-**Remise is a free toolbox for your files.** Compress a PDF, turn a video into a GIF, convert a Word document, remove a photo's location data, make a QR code — 99 small tools in one desktop app.
+**Remise is a free toolbox for your files.** Compress a PDF, turn a video into a GIF, convert a Word document, remove a photo's location data, make a QR code — 100 small tools in one desktop app.
 
 Everything happens **on your computer**. Nothing is uploaded, there's no account, and it works offline. Your original files are never changed: every result is saved as a new file next to the original.
 
@@ -96,11 +96,11 @@ The app's Settings (the gear, top right) show the exact path under *Command line
 ## What's inside
 
 <details>
-<summary><b>All 99 tools</b> (click to open)</summary>
+<summary><b>All 100 tools</b> (click to open)</summary>
 
 | Family | Tools |
 |---|---|
-| **PDF** (28) | Compress, Merge, Split, Extract pages, Organize pages, Rotate pages, OCR (scans → searchable PDF), PDF to images, Images to PDF, Extract text, PDF to Markdown, Grayscale, Encrypt, Unlock, Optimize for web, PDF/A (archival), Redact, Sign, Crop margins, Page numbers, Stamp, Attach to each (a cover or terms page on every PDF), Flatten, Repair, Office to PDF, Ebook (EPUB) to PDF, HTML to PDF, PDF Studio |
+| **PDF** (29) | Compress, Merge, Split, Extract pages, Organize pages, Rotate pages, OCR (scans → searchable PDF), PDF to images, Images to PDF, Extract text, PDF to Markdown, PDF to Office (Word, PowerPoint, RTF, web page), Grayscale, Encrypt, Unlock, Optimize for web, PDF/A (archival), Redact, Sign, Crop margins, Page numbers, Stamp, Attach to each (a cover or terms page on every PDF), Flatten, Repair, Office to PDF, Ebook (EPUB) to PDF, HTML to PDF, PDF Studio |
 | **Docs** (6) | Convert document (Word, OpenDocument, PDF, web page, EPUB, RTF, text), To Markdown, Markdown to PDF, Markdown to Word, Markdown to slides, PDF to Ebook |
 | **Image** (21) | Convert, Compress, Resize, Crop, Rotate & flip, Auto-crop borders, Strip metadata, Extract text, Redact (black box or pixelate), SEO image, Compare, Logo on each, Remove background, Vectorize, Stylize, Watermark, Upscale, AI Upscale, Icon pack, Color palette, Contact sheet |
 | **Video** (19) | Compress, Convert, Video to GIF, Trim, Split, Crop, Resize, Rotate, Change speed, Mute, Extract audio, Add audio, Join, Insert clip, Watermark, Caption (burn in subtitles), Transcribe, Extract frames, Video downloader |
@@ -118,6 +118,7 @@ A few tools need something too big to put in every download. The first time you 
 | Transcribe | a speech model, 190 MB |
 | Office to PDF | LibreOffice, 299 to 376 MB |
 | PDF Studio (annotate, sign, fill forms) | [PdfCraft](https://github.com/storytold/pdfcraft), 115 to 129 MB |
+| PDF to Office | PdfCraft's command line: in the same download on Windows and Linux, 86 MB more on macOS |
 | Video downloader | [yt-dlp](https://github.com/yt-dlp/yt-dlp), 18 to 41 MB |
 | HTML to PDF, HTML to image | Chromium, 105 to 128 MB, only on a Mac or Linux PC with no Chrome, Edge or Chromium |
 

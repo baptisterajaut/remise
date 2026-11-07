@@ -26,6 +26,7 @@ const PRODUCTS = {
   potrace: ["Potrace", "potrace"],
   onnxruntime: ["ONNX Runtime", null],
   pdfcraft: ["PdfCraft", null],
+  "pdfcraft-cli": ["PdfCraft", null],
   chromium: ["a Chromium browser", null],
   "yt-dlp": ["yt-dlp", "yt-dlp"],
   "whisper-cli": ["whisper.cpp", null],
@@ -701,8 +702,10 @@ function aboutPanel(a) {
 }
 
 function downloadsPanel() {
+  // Programs from one archive (PdfCraft and its command line) share a name: one row, one download.
   const rows = Object.entries(state.downloads)
     .sort(([, x], [, y]) => x.name.localeCompare(y.name))
+    .filter(([, d], i, all) => i === 0 || all[i - 1][1].name !== d.name)
     .map(([bin, d]) => downloadRow(bin, d));
   return [
     h("p", { class: "blurb" }, "Big programs and models a few tools need, downloaded the first time you use one. Remove one to get the space back: its tools offer the download again."),

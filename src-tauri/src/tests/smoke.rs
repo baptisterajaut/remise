@@ -185,6 +185,7 @@ const OPTIONAL_BINS: &[&str] = &["chromium", "soffice", "waifu2x-ncnn-vulkan", "
 /// Optional installs, the network, and tools that move files or need a previous output.
 const NOT_IN_LOOP: &[&str] = &[
     "pdf-studio",
+    "pdf-to-office",
     "img-remove-bg",
     "vid-transcribe",
     "vid-download",
@@ -371,6 +372,13 @@ fn smoke_downloads_then_use_them() {
     // PdfCraft only opens a window; check it lands, unpacked from its zip / tar.gz / dmg.
     let editor = crate::fetch::fetch(&|_| {}, crate::fetch::find("pdfcraft").unwrap()).unwrap();
     assert!(editor.is_file() && crate::bins::which("pdfcraft") == Some(editor));
+    // Its command line: from the same archive (nothing more to fetch) except on macOS.
+    crate::fetch::fetch(&|_| {}, crate::fetch::find("pdfcraft-cli").unwrap()).unwrap();
+    for (format, part) in [("docx", "word/document.xml"), ("pptx", "ppt/slides/slide1.xml")] {
+        let out = go("pdf-to-office", &[&fx.pdf], &[("format", format)], &fx.dir).unwrap();
+        let zip = fs::read(&out[0]).unwrap();
+        assert!(zip.starts_with(b"PK") && zip.windows(part.len()).any(|w| w == part.as_bytes()), "{format}: no {part}");
+    }
     // Background removal runs the app itself as a helper: REMISE_SELF is the built `remise`.
     if std::env::var_os("REMISE_SELF").is_some() {
         crate::fetch::fetch(&|_| {}, crate::fetch::find("bg-model").unwrap()).unwrap();

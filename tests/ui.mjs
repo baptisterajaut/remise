@@ -25,7 +25,7 @@ window.__TAURI__ = {
   core: {
     invoke: async (cmd, args) => {
       if (cmd === "list_tools") return ${manifest}.map((t) => ({ ...t, missing: window.__missing[t.id] ?? [] }));
-      if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129, state: window.__dlState } };
+      if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129, state: window.__dlState }, pdfcraft: { name: "PdfCraft", mb: 115, state: "present" }, "pdfcraft-cli": { name: "PdfCraft", mb: 115, state: "present" } };
       if (cmd === "about") return { version: "0.2.0", bundled: [["qpdf 12.4.2", "Apache-2.0"]], credits: "/app/vendor/THIRD_PARTY.md", command: "/usr/bin/remise" };
       if (cmd === "remove_download") return (window.__removed.push(args.bin), (window.__dlState = "missing"));
       if (cmd === "download") return window.__download(args);
@@ -231,6 +231,7 @@ const NEW_TOOLS = [
   { card: /PDF\/A/, option: "PDF/A-1b", drop: ["/d/a.pdf"], params: { level: "1" } },
   { card: /Checksum/, option: "Check", drop: ["/d/disk.iso"], params: { mode: "check" } },
   { card: /Find duplicates/, drop: ["/d/a.jpg", "/d/b.jpg"], params: {} },
+  { card: /Back to an editable Word/, drop: ["/d/a.pdf"], params: { format: "docx" } },
   { card: /Clean up recording/, option: "Over 1 s", drop: ["/d/talk.mp4"], params: { pauses: "1", level: "-35", denoise: "on" } },
 ];
 async function newToolsFlow(page) {
@@ -411,6 +412,8 @@ async function settingsFlow(page, shot) {
   assert.equal(await page.evaluate(() => window.__opened), "https://github.com/baptisterajaut/remise");
   await shot("settings");
   await page.getByRole("tab", { name: "Downloads" }).click();
+  // PdfCraft's editor and command line come in one archive: one row.
+  assert.equal(await page.locator(".dl-list li").count(), 2);
   await page.getByRole("button", { name: "Download", exact: true }).click();
   await page.getByRole("button", { name: "Remove", exact: true }).click();
   await page.waitForFunction(() => window.__removed.includes("chromium"));

@@ -15,6 +15,9 @@ use std::time::Duration;
 pub struct Download {
     /// The name tools ask for in `Tool::bins`.
     pub bin: &'static str,
+    /// Its folder under the per-user tools dir. Two programs from the same archive share one, so
+    /// it is downloaded once for both (PdfCraft's editor and its command line).
+    pub dir: &'static str,
     pub name: &'static str,
     pub url: &'static str,
     pub sha256: &'static str,
@@ -34,6 +37,7 @@ macro_rules! chrome {
 #[cfg(target_os = "linux")]
 const BROWSER: &[Download] = &[Download {
     bin: "chromium",
+    dir: "chromium",
     name: "Chromium",
     url: chrome!("linux64/chrome-headless-shell-linux64.zip"),
     sha256: "deafffa74660b34853a4119c361fd427ac8c9fcb62db51ddb8a797cd83a4ba2d",
@@ -43,6 +47,7 @@ const BROWSER: &[Download] = &[Download {
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const BROWSER: &[Download] = &[Download {
     bin: "chromium",
+    dir: "chromium",
     name: "Chromium",
     url: chrome!("mac-arm64/chrome-headless-shell-mac-arm64.zip"),
     sha256: "e6a6b13551aa12f951d0891d79282606b13742837c8fa0505e1272bae116ce82",
@@ -52,6 +57,7 @@ const BROWSER: &[Download] = &[Download {
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 const BROWSER: &[Download] = &[Download {
     bin: "chromium",
+    dir: "chromium",
     name: "Chromium",
     url: chrome!("mac-x64/chrome-headless-shell-mac-x64.zip"),
     sha256: "79821745d0a72d2ba752d981284ed0a9e6fa320dad133596941a17dba6186de3",
@@ -70,32 +76,55 @@ macro_rules! pdfcraft {
 #[cfg(target_os = "linux")]
 const EDITOR: &[Download] = &[Download {
     bin: "pdfcraft",
+    dir: "pdfcraft",
     name: "PdfCraft",
     url: pdfcraft!("pdfcraft-0.19.0-linux-x86_64.tar.gz"),
     sha256: "3657aa40fe146d4af40fab0507c97f6ee2c6ce5ba9938567194439be3335ba8b",
     bytes: 114_926_704,
     path: "pdfcraft-0.19.0-linux-x86_64/bin/pdfcraft",
 }];
+/// Its command line, for PDF to Office: inside the same archive on Linux and Windows.
+#[cfg(target_os = "linux")]
+const EXPORTER: &[Download] =
+    &[Download { bin: "pdfcraft-cli", dir: "pdfcraft", path: "pdfcraft-0.19.0-linux-x86_64/bin/pdfcraft-cli", ..EDITOR[0] }];
 #[cfg(windows)]
 const EDITOR: &[Download] = &[Download {
     bin: "pdfcraft",
+    dir: "pdfcraft",
     name: "PdfCraft",
     url: pdfcraft!("pdfcraft-0.19.0-windows-x64-portable.zip"),
     sha256: "73efe9ea0f4ff81bf3b7708ae9779e021db9b9acfa4962b7dc6444c2fef08a90",
     bytes: 116_309_798,
     path: "pdfcraft-0.19.0-windows-x64-portable/pdfcraft.exe",
 }];
+#[cfg(windows)]
+const EXPORTER: &[Download] =
+    &[Download { bin: "pdfcraft-cli", dir: "pdfcraft", path: "pdfcraft-0.19.0-windows-x64-portable/pdfcraft-cli.exe", ..EDITOR[0] }];
 #[cfg(target_os = "macos")]
 const EDITOR: &[Download] = &[Download {
     bin: "pdfcraft",
+    dir: "pdfcraft",
     name: "PdfCraft",
     url: pdfcraft!("pdfcraft-0.19.0-macos-universal.dmg"),
     sha256: "8b41d907b1a030b4ba8df03b5eb969f7090f8f41ece23bcb799077f208a10c96",
     bytes: 129_238_239,
     path: "PdfCraft.app/Contents/MacOS/PdfCraft",
 }];
+/// The app in the disk image has no command line: it comes in its own zip.
+#[cfg(target_os = "macos")]
+const EXPORTER: &[Download] = &[Download {
+    bin: "pdfcraft-cli",
+    dir: "pdfcraft-cli",
+    name: "PdfCraft's command line",
+    url: pdfcraft!("pdfcraft-cli-0.19.0-macos-universal.zip"),
+    sha256: "633d78de4c61988e66685e922585692db8aca84f809989da1611eeba4d5d3262",
+    bytes: 85_850_688,
+    path: "pdfcraft-cli-0.19.0-macos-universal/pdfcraft-cli",
+}];
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 const EDITOR: &[Download] = &[];
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+const EXPORTER: &[Download] = &[];
 
 /// LibreOffice for Office → PDF, the only faithful renderer of Word/Excel/PowerPoint layouts.
 /// The Document Foundation's archive keeps every build at a fixed URL; on Linux, the AppImage
@@ -109,6 +138,7 @@ macro_rules! libreoffice {
 #[cfg(target_os = "linux")]
 const OFFICE: &[Download] = &[Download {
     bin: "soffice",
+    dir: "soffice",
     name: "LibreOffice",
     url: "https://appimages.libreitalia.org/LibreOffice-26.8.2.2.basic-x86_64.AppImage",
     sha256: "2a5452966b0c2b3125585e3c1be895b511042982daca6253dfd6eb95febf07db",
@@ -118,6 +148,7 @@ const OFFICE: &[Download] = &[Download {
 #[cfg(windows)]
 const OFFICE: &[Download] = &[Download {
     bin: "soffice",
+    dir: "soffice",
     name: "LibreOffice",
     url: libreoffice!("win/x86_64/LibreOffice_26.8.2.2_Win_x86-64.msi"),
     sha256: "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
@@ -127,6 +158,7 @@ const OFFICE: &[Download] = &[Download {
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const OFFICE: &[Download] = &[Download {
     bin: "soffice",
+    dir: "soffice",
     name: "LibreOffice",
     url: libreoffice!("mac/aarch64/LibreOffice_26.8.2.2_MacOS_aarch64.dmg"),
     sha256: "9f24fe83ab1ed5c95eb3df580119f32932f713e577feeac02bf619fb00749b55",
@@ -136,6 +168,7 @@ const OFFICE: &[Download] = &[Download {
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 const OFFICE: &[Download] = &[Download {
     bin: "soffice",
+    dir: "soffice",
     name: "LibreOffice",
     url: libreoffice!("mac/x86_64/LibreOffice_26.8.2.2_MacOS_x86-64.dmg"),
     sha256: "0af062779cc17f6f852918b2424c745f7dd2d20d51d7fb8a0925eb92ec0417a7",
@@ -155,6 +188,7 @@ macro_rules! ytdlp {
 #[cfg(target_os = "linux")]
 const YTDLP: &[Download] = &[Download {
     bin: "yt-dlp",
+    dir: "yt-dlp",
     name: "yt-dlp",
     url: ytdlp!("yt-dlp_linux"),
     sha256: "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f",
@@ -164,6 +198,7 @@ const YTDLP: &[Download] = &[Download {
 #[cfg(windows)]
 const YTDLP: &[Download] = &[Download {
     bin: "yt-dlp",
+    dir: "yt-dlp",
     name: "yt-dlp",
     url: ytdlp!("yt-dlp.exe"),
     sha256: "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555",
@@ -174,6 +209,7 @@ const YTDLP: &[Download] = &[Download {
 #[cfg(target_os = "macos")]
 const YTDLP: &[Download] = &[Download {
     bin: "yt-dlp",
+    dir: "yt-dlp",
     name: "yt-dlp",
     url: ytdlp!("yt-dlp_macos"),
     sha256: "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40",
@@ -188,6 +224,7 @@ const YTDLP: &[Download] = &[];
 const MODELS: &[Download] = &[
     Download {
         bin: "bg-model",
+        dir: "bg-model",
         name: "the background-removal model",
         url: "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
         sha256: "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333",
@@ -196,6 +233,7 @@ const MODELS: &[Download] = &[
     },
     Download {
         bin: "whisper-model",
+        dir: "whisper-model",
         name: "the Whisper speech model",
         url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin",
         sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
@@ -205,19 +243,19 @@ const MODELS: &[Download] = &[
 ];
 
 pub fn find(bin: &str) -> Option<&'static Download> {
-    BROWSER.iter().chain(EDITOR).chain(OFFICE).chain(YTDLP).chain(MODELS).find(|d| d.bin == bin)
+    BROWSER.iter().chain(EDITOR).chain(EXPORTER).chain(OFFICE).chain(YTDLP).chain(MODELS).find(|d| d.bin == bin)
 }
 
 /// The downloaded file for `bin`, if it's there.
 pub fn installed(bin: &str) -> Option<PathBuf> {
     let d = find(bin)?;
-    Some(program(d, &bins::user_tools()?.join(d.bin))).filter(|p| p.is_file())
+    Some(program(d, &bins::user_tools()?.join(d.dir))).filter(|p| p.is_file())
 }
 
 /// Deletes what was downloaded for `d`: the tools that need it ask for it again.
 pub fn remove(d: &Download) -> Result<(), String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-    let dir = bins::user_tools().ok_or("no folder for downloaded tools")?.join(d.bin);
+    let dir = bins::user_tools().ok_or("no folder for downloaded tools")?.join(d.dir);
     match fs::remove_dir_all(&dir) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Err(format!("can't remove {}: {e}", d.name)),
         _ => Ok(()),
@@ -235,26 +273,26 @@ static BUSY: Mutex<()> = Mutex::new(());
 
 pub fn fetch_into(emit: Emit, d: &Download, root: &Path) -> Result<PathBuf, String> {
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(done) = Some(program(d, &root.join(d.bin))).filter(|p| p.is_file()) {
+    if let Some(done) = Some(program(d, &root.join(d.dir))).filter(|p| p.is_file()) {
         return Ok(done);
     }
     fs::create_dir_all(root).map_err(|e| e.to_string())?;
     // Ends with the download's own name: msiexec only opens a file named .msi.
-    let part = root.join(format!("{}.part-{}", d.bin, d.url.rsplit('/').next().unwrap_or_default()));
+    let part = root.join(format!("{}.part-{}", d.dir, d.url.rsplit('/').next().unwrap_or_default()));
     download(emit, d, &part)?;
     let sum = sha256(&part).map_err(|e| e.to_string())?;
     if sum != d.sha256 {
         let _ = fs::remove_file(&part);
         return Err(format!("{} didn't download correctly (checksum mismatch); try again", d.name));
     }
-    let staging = root.join(format!("{}.new", d.bin));
+    let staging = root.join(format!("{}.new", d.dir));
     let _ = fs::remove_dir_all(&staging);
     fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
     if let Err(e) = unpack(d, &part, &staging) {
         let _ = fs::remove_dir_all(&staging);
         return Err(e);
     }
-    let dest = root.join(d.bin);
+    let dest = root.join(d.dir);
     let _ = fs::remove_dir_all(&dest);
     fs::rename(&staging, &dest).map_err(|e| e.to_string())?;
     let exe = program(d, &dest);

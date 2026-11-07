@@ -549,7 +549,7 @@ pub static TOOLS: &[Tool] = &[
         id: "pdf-markdown",
         family: Family::Pdf,
         name: "PDF to Markdown",
-        blurb: "Text layer as Markdown, one section per page.",
+        blurb: "The text as Markdown, one section per page, with nothing to download. PDF to Office rebuilds headings and tables.",
         bins: &["gs"],
         accepts: PDF,
         inputs: Inputs::One,
@@ -571,6 +571,33 @@ pub static TOOLS: &[Tool] = &[
                 ),
                 Step::Then(|j| Ok(vec![Step::Write(j.out.clone(), to_markdown(&j.stem(), &text_pages(j)?))])),
             ]
+        },
+    },
+    Tool {
+        id: "pdf-to-office",
+        family: Family::Pdf,
+        name: "PDF to Office",
+        blurb: "Back to an editable Word, PowerPoint or web page. Headings, tables and lists come through; the exact layout doesn't.",
+        bins: &["pdfcraft-cli"],
+        accepts: PDF,
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "format",
+            label: "Format",
+            options: &[
+                ("docx", "Word"),
+                ("pptx", "PowerPoint (a slide per page)"),
+                ("rtf", "RTF"),
+                ("html", "Web page"),
+                ("html-simple", "Web page, unstyled"),
+                ("md", "Markdown"),
+            ],
+            default: "docx",
+        }],
+        output: Output::File { suffix: "export", ext: |j| j.p("format").trim_end_matches("-simple").into() },
+        build: |j| {
+            let script = j.tmp("export.json");
+            vec![Step::Write(script.clone().into(), office_script(j)), Step::Run("pdfcraft-cli", args!["run", "--script", script])]
         },
     },
     Tool {
@@ -671,6 +698,20 @@ pub static TOOLS: &[Tool] = &[
         },
     },
 ];
+
+/// PdfCraft's command line runs a JSON list of its automation tools: open the PDF (document 1),
+/// export it, the format chosen by the output's extension. JSON-escaped, so Windows paths survive.
+pub fn office_script(j: &Job) -> String {
+    let mut export = serde_json::json!({ "doc": 1, "path": j.out() });
+    if j.p("format") == "html-simple" {
+        export["html_mode"] = "simple".into();
+    }
+    serde_json::json!([
+        { "tool": "doc_open", "args": { "path": j.input() } },
+        { "tool": "doc_export_office", "args": export },
+    ])
+    .to_string()
+}
 
 /// The `page-NNNN.txt` files gs txtwrite left in tmp, in page order.
 pub fn text_pages(j: &Job) -> Result<Vec<String>, String> {

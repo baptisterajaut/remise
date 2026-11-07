@@ -293,3 +293,24 @@ fn about_lists_bundled_programs_with_their_licence() {
     let real = crate::third_party(&std::fs::read_to_string("../vendor/THIRD_PARTY.md").unwrap_or_default());
     assert!(real.iter().all(|(name, licence)| !name.is_empty() && !licence.is_empty()), "{real:?}");
 }
+
+#[test]
+fn office_export_script_carries_any_path_and_the_html_mode() {
+    let t = tools::find("pdf-to-office").unwrap();
+    let job = |format: &str| Job {
+        inputs: vec![PathBuf::from(r#"C:\Users\Zoé\"q" doc.pdf"#)],
+        out: PathBuf::from(r"C:\Users\Zoé\doc.export.html"),
+        tmp: PathBuf::from("/tmp/job"),
+        params: tools::with_defaults(t, [("format".to_string(), format.to_string())].into()),
+    };
+    let steps: serde_json::Value = serde_json::from_str(&pdf::office_script(&job("html-simple"))).unwrap();
+    assert_eq!(steps[0]["args"]["path"], r#"C:\Users\Zoé\"q" doc.pdf"#);
+    assert_eq!(steps[1]["args"], serde_json::json!({ "doc": 1, "path": r"C:\Users\Zoé\doc.export.html", "html_mode": "simple" }));
+    let rich: serde_json::Value = serde_json::from_str(&pdf::office_script(&job("html"))).unwrap();
+    assert!(rich[1]["args"].get("html_mode").is_none());
+    let ext = |f: &str| match t.output {
+        tools::Output::File { ext, .. } => ext(&job(f)),
+        _ => unreachable!(),
+    };
+    assert_eq!([ext("docx"), ext("html-simple"), ext("md")], ["docx", "html", "md"]);
+}
