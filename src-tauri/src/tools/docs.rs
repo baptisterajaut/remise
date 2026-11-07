@@ -38,7 +38,8 @@ pub static TOOLS: &[Tool] = &[
         family: Family::Docs,
         name: "Convert document",
         blurb: "Word, OpenDocument, HTML, EPUB, Markdown, LaTeX… into each other.",
-        bins: &["pandoc"],
+        // Typst lays out the PDF choice (`pandoc`, --pdf-engine=typst).
+        bins: &["pandoc", "typst"],
         accepts: DOCS,
         inputs: Inputs::One,
         params: &[Param::Select {
