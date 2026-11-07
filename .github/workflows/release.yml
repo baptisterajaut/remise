@@ -66,9 +66,6 @@ jobs:
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # AppImage: xz instead of the default, ~50 MB smaller. Tauri runs linuxdeploy with this
-          # env, and its AppImage plugin passes it on to mksquashfs.
-          LDAI_COMP: xz
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: Remise ${{ github.ref_name }}
