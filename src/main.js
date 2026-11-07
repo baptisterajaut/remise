@@ -56,12 +56,14 @@ const $ = (id) => document.getElementById(id);
 const state = {
   tools: [],
   downloads: {},
-  fetching: null, // { pct } while a download runs
+  fetching: null, // { bins, pct } while a download runs
   family: "all",
   query: "",
   dropped: null, // paths dropped on the wall, used to filter tools that fit
   view: "wall",
   bench: null, // { tool?, chain?, params, rows, running }
+  settled: false, // the wall's hang-in plays on the first paint only
+  wallScroll: 0,
   chains: load("remise.chains", []),
   draft: [],
 };
@@ -111,12 +113,19 @@ function defaults(tool) {
 }
 
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 2600) {
   const t = $("toast");
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), 2600);
+  toastTimer = setTimeout(() => (t.hidden = true), ms);
+}
+
+/** Re-render a box without losing the keyboard focus: focusable children carry a data-focus key. */
+function keepFocus(box, render) {
+  const key = box.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
+  render();
+  if (key) box.querySelector(`[data-focus="${CSS.escape(key)}"]`)?.focus();
 }
 
 /* ───────────────────────── rail & wall ───────────────────────── */
@@ -126,22 +135,23 @@ function renderRail() {
   const item = ([f, label, color]) =>
     h(
       "button",
-      { type: "button", "aria-current": state.view === "wall" && state.family === f, onclick: () => pickFamily(f) },
+      { type: "button", "data-focus": f, "aria-current": state.view === "wall" && state.family === f, onclick: () => pickFamily(f) },
       h("span", { class: "dot", style: `--c:${color}` }),
       label,
       h("span", { class: "n" }, String(count(f))),
     );
   const chains = h(
     "button",
-    { type: "button", "aria-current": state.view === "chains", onclick: () => show("chains") },
+    { type: "button", "data-focus": "chains", "aria-current": state.view === "chains", onclick: () => show("chains") },
     h("span", { class: "dot", style: "--c:var(--chain)" }),
     "Chains",
     h("span", { class: "n" }, String(state.chains.length)),
   );
-  $("rail").replaceChildren(...FAMILIES.map(item), h("hr"), chains);
+  keepFocus($("rail"), () => $("rail").replaceChildren(...FAMILIES.map(item), h("hr"), chains));
 }
 
 function pickFamily(f) {
+  if (state.view === "bench" && state.bench.running) return show("wall");
   state.family = f;
   show("wall");
 }
@@ -170,6 +180,7 @@ function tag(tool, i) {
     {
       type: "button",
       class: off ? "hook off" : "hook",
+      "data-id": tool.id,
       style: `--c:${famColor(tool.family)};--r:${tilt(tool.id)}deg;--i:${i}`,
       onclick: () => openTool(tool),
     },
@@ -201,19 +212,21 @@ function renderWall() {
   if (state.dropped) kids.unshift(droppedBanner());
   if (!tools.length) kids.push(h("p", { class: "empty" }, "Nothing on the wall matches."));
   $("wall").replaceChildren(...kids);
+  // Later paints (search, filters) show the cards at once instead of replaying the stagger.
+  $("wall").classList.toggle("settled", state.settled);
+  state.settled = true;
 }
 
 /* ───────────────────────── params form ───────────────────────── */
 
 function segmented(p, values, onChange) {
   const seg = h("div", { class: "seg" });
-  const paint = () =>
-    seg.replaceChildren(
-      ...p.options.map(([v, label]) =>
-        h("button", { type: "button", "aria-pressed": values[p.key] === v, onclick: () => (onChange(p.key, v), paint()) }, label),
-      ),
-    );
-  paint();
+  const buttons = p.options.map(([v, label]) =>
+    h("button", { type: "button", "aria-pressed": values[p.key] === v, onclick: () => (onChange(p.key, v), paint()) }, label),
+  );
+  // Toggled in place: rebuilding the buttons would drop the focus of the one just pressed.
+  const paint = () => buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(values[p.key] === p.options[i][0])));
+  seg.append(...buttons);
   return seg;
 }
 
@@ -249,6 +262,7 @@ function openTool(tool, files = state.dropped ?? []) {
   state.bench = { tool, params, rows: [], running: false };
   state.dropped = null;
   show("bench");
+  $("back").textContent = "← back to the wall";
   $("bench-family").textContent = tool.family;
   $("bench-title").textContent = tool.name;
   $("bench-blurb").textContent = tool.blurb;
@@ -265,26 +279,38 @@ function openTool(tool, files = state.dropped ?? []) {
   $("drop").hidden = $("clear").hidden = tool.generator;
   if (!tool.generator) addFiles(files);
   else renderRows();
+  $("bench-title").focus();
 }
 
 function openChain(chain) {
-  state.bench = { chain, rows: [], running: false };
+  const gone = chain.steps.filter((s) => !toolById(s.tool));
+  if (gone.length) return toast(`This chain uses tools this version doesn't have (${gone.map((s) => s.tool).join(", ")}). Remove it and build it again.`, 6000);
+  // Passwords are never saved with a chain: they are asked for here, each time.
+  const secrets = chain.steps.map(() => ({}));
+  state.bench = { chain, secrets, rows: [], running: false };
   show("bench");
+  $("back").textContent = "← back to chains";
   $("bench-family").textContent = "chain";
   $("bench-title").textContent = chain.name;
   $("bench-blurb").textContent = `${chain.steps.length} steps, one result per file.`;
   $("bench").style.setProperty("--c", "var(--chain)");
-  $("params").replaceChildren();
-  const first = toolById(chain.steps[0].tool);
-  $("accepts").textContent = first?.accepts.join(" · ") ?? "";
+  const asks = chain.steps.flatMap((s, i) => {
+    const tool = toolById(s.tool);
+    const secret = tool.params.filter((p) => p.key === "password").map((p) => ({ ...p, label: `${tool.name}: ${p.label}` }));
+    return secret.map((p) => field(p, secrets[i], (k, v) => (secrets[i][k] = v)));
+  });
+  $("params").replaceChildren(...asks);
+  $("accepts").textContent = toolById(chain.steps[0].tool).accepts.join(" · ");
   $("chain-steps").hidden = false;
   $("drop").hidden = $("clear").hidden = false;
   $("chain-steps").replaceChildren(...chain.steps.map(stepSummary));
+  renderRows();
+  $("bench-title").focus();
 }
 
 function stepSummary(step) {
   const tool = toolById(step.tool);
-  const opts = tool.params.map((p) => {
+  const opts = tool.params.filter((p) => p.key !== "password").map((p) => {
     const v = step.params[p.key];
     return p.kind === "select" ? (p.options.find(([o]) => o === v)?.[1] ?? v) : v;
   });
@@ -301,14 +327,18 @@ function addFiles(paths) {
   const first = benchTools()[0];
   const ok = paths.filter((p) => fits(first, [p]));
   if (ok.length < paths.length) toast(`${paths.length - ok.length} file(s) skipped — ${first.name} doesn't take them`);
-  const known = new Set(b.rows.flatMap((r) => r.paths));
-  const fresh = ok.filter((p) => !known.has(p));
   if (b.tool?.multi) {
     const pending = b.rows.find((r) => r.state === "queued");
+    const fresh = ok.filter((p) => !pending?.paths.includes(p));
     if (pending) pending.paths.push(...fresh);
     else if (fresh.length) b.rows.push(row(fresh));
   } else {
-    b.rows.push(...fresh.map((p) => row([p])));
+    // Dropping a file again after a run (new settings, a fix) queues it again.
+    for (const p of ok) {
+      const r = b.rows.find((x) => x.paths[0] === p);
+      if (!r) b.rows.push(row([p]));
+      else if (r.state === "done" || r.state === "fail") Object.assign(r, { state: "queued", pct: null, out: [], err: "" });
+    }
   }
   renderRows();
   refreshPreview();
@@ -317,9 +347,12 @@ function addFiles(paths) {
 let jobSeq = 0;
 const row = (paths) => ({ id: `j${++jobSeq}`, paths, state: "queued", pct: null, step: 0, out: [], err: "" });
 
+/** Long names lose their middle, not their end: "scan-2024-…-final-v3.pdf" still tells files apart. */
+const short = (name) => (name.length > 44 ? `${name.slice(0, 24)}…${name.slice(-19)}` : name);
+
 function rowLabel(r) {
   if (!r.paths.length) return state.bench.tool.name;
-  return r.paths.length > 1 ? `${base(r.paths[0])} + ${r.paths.length - 1} more` : base(r.paths[0]);
+  return r.paths.length > 1 ? `${short(base(r.paths[0]))} + ${r.paths.length - 1} more` : short(base(r.paths[0]));
 }
 
 function rowStatus(r) {
@@ -346,12 +379,16 @@ async function refreshPreview() {
   const b = state.bench;
   const r = b?.tool?.output === "none" && b.rows.find((x) => x.state === "queued");
   if (!r) return;
+  const seq = (b.previewSeq = (b.previewSeq ?? 0) + 1);
+  let preview;
   try {
     const pairs = await invoke("preview", { tool: b.tool.id, params: b.params, inputs: r.paths });
-    b.preview = pairs.length ? { pairs } : null;
+    preview = pairs.length ? { pairs } : null;
   } catch (e) {
-    b.preview = { err: String(e) };
+    preview = { err: String(e) };
   }
+  if (seq !== b.previewSeq) return; // an older answer, overtaken by a newer setting
+  b.preview = preview;
   if (state.bench === b) renderRows();
 }
 
@@ -364,25 +401,43 @@ function rowView(r) {
     r.state === "running" && h("div", { class: r.pct == null ? "bar indet" : "bar", style: `--p:${r.pct ?? 0}` }, h("i")),
     r.state === "fail" && h("pre", { class: "err" }, r.err),
     r.state === "queued" && previewView(),
-    r.out.map((o) =>
-      h("div", { class: "out" }, "→", h("span", { title: o }, base(o)), h("button", { type: "button", onclick: () => revealItemInDir(o) }, "show")),
+    r.out.map((o, i) =>
+      h(
+        "div",
+        { class: "out" },
+        "→",
+        h("span", { title: o }, short(base(o))),
+        h("button", { type: "button", "data-focus": `${r.id}:${i}`, onclick: () => revealItemInDir(o) }, "show"),
+      ),
     ),
   );
 }
 
 function renderRows() {
   const b = state.bench;
-  $("files").replaceChildren(...b.rows.map(rowView));
+  keepFocus($("files"), () => $("files").replaceChildren(...b.rows.map(rowView)));
   const missing = [...new Set(benchTools().flatMap((t) => t.missing))];
   const run = $("run");
   const ready = b.tool?.generator || b.rows.some((r) => r.state === "queued");
-  run.disabled = Boolean(state.fetching) || b.stopping || (!b.running && (missing.length ? !fetchable(missing) : !ready));
+  // One download at a time: it holds back the benches that need it or another one.
+  const waiting = Boolean(state.fetching) && missing.length > 0;
+  run.disabled = waiting || b.stopping || (!b.running && (missing.length ? !fetchable(missing) : !ready));
   run.textContent = runLabel(missing);
-  run.title = missing.length ? installHint(missing) : "";
+  $("clear").disabled = b.running;
+  renderNote(b, missing);
+}
+
+/** What went wrong with a download, or how to install what Remise can't fetch, stays in view. */
+function renderNote(b, missing) {
+  const note = b.fetchError ?? (missing.length && !fetchable(missing) ? installHint(missing) : "");
+  $("bench-note").textContent = note;
+  $("bench-note").hidden = !note;
+  $("bench-note").classList.toggle("err", Boolean(b.fetchError));
 }
 
 function runLabel(missing) {
-  if (state.fetching) return `Downloading… ${Math.round((state.fetching.pct ?? 0) * 100)} %`;
+  const f = state.fetching;
+  if (f && missing.some((m) => f.bins.includes(m))) return `Downloading… ${Math.round((f.pct ?? 0) * 100)} %`;
   if (fetchable(missing)) return `Download ${missing.map((m) => state.downloads[m].name).join(" + ")} (${missing.reduce((n, m) => n + state.downloads[m].mb, 0)} MB)`;
   if (missing.length) return `Needs ${missing.map(product).join(", ")}`;
   if (state.bench.stopping) return "Stopping…";
@@ -393,34 +448,41 @@ function runLabel(missing) {
 /** Fetch what the open tool is missing, then pick the tools up again with it found. */
 async function fetchMissing() {
   const b = state.bench;
-  state.fetching = { pct: 0 };
+  state.fetching = { bins: [...new Set(benchTools().flatMap((t) => t.missing))], pct: 0 };
+  b.fetchError = null;
   renderRows();
   try {
-    for (const bin of new Set(benchTools().flatMap((t) => t.missing))) await invoke("download", { bin });
+    for (const bin of state.fetching.bins) await invoke("download", { bin });
     toast("Downloaded. It stays on this computer, no need to do it again.");
   } catch (e) {
-    toast(String(e));
+    b.fetchError = `Download failed: ${e}`;
+    toast(b.fetchError, 6000);
   }
   state.fetching = null;
   state.tools = await invoke("list_tools");
-  if (b.tool) b.tool = toolById(b.tool.id);
+  // Whichever bench is open now may have been waiting on the same download.
+  for (const x of new Set([b, state.bench])) if (x.tool) x.tool = toolById(x.tool.id);
   renderRows();
 }
 
-async function runRow(r) {
-  const b = state.bench;
-  const steps = b.tool ? [{ tool: b.tool.id, params: withTimeZone(b.params) }] : b.chain.steps;
+/** Settings as they are when Run is pressed: changing them mid-run only affects the next run. */
+function runSteps(b) {
+  if (b.tool) return [{ tool: b.tool.id, params: withTimeZone({ ...b.params }) }];
+  return b.chain.steps.map((s, i) => ({ ...s, params: { ...s.params, ...b.secrets[i] } }));
+}
+
+async function runRow(b, r, steps) {
   r.state = "running";
-  renderRows();
+  if (state.bench === b) renderRows();
   try {
     r.out = await invoke("run", { job: r.id, steps, inputs: r.paths });
     r.state = "done";
   } catch (e) {
     r.state = "fail";
     r.err = String(e);
-    if (r.err === "Stopped.") unstop(r);
+    if (r.err === "Stopped.") unstop(b, r);
   }
-  renderRows();
+  if (state.bench === b) renderRows();
 }
 
 /** A typed date means local time: tell the backend the UTC offset in force on that date. */
@@ -432,8 +494,7 @@ function withTimeZone(params) {
 }
 
 /** A stopped file goes back in the queue; a stopped generator run just goes away. */
-function unstop(r) {
-  const b = state.bench;
+function unstop(b, r) {
   if (!r.paths.length) b.rows.splice(b.rows.indexOf(r), 1);
   Object.assign(r, { state: "queued", err: null, pct: null });
 }
@@ -452,17 +513,20 @@ async function runAll() {
   if (benchTools().some((t) => t.missing.length)) return fetchMissing();
   if (b.tool?.generator) b.rows.push(row([]));
   b.running = true;
+  const steps = runSteps(b);
   // Sequential on purpose: these tools already use every core.
   for (const r of b.rows.filter((x) => x.state === "queued")) {
     if (b.stopping) break;
-    await runRow(r);
+    await runRow(b, r, steps);
   }
   const stopped = b.stopping;
   b.running = b.stopping = false;
+  if (state.bench !== b) return;
   renderRows();
   const failed = b.rows.filter((r) => r.state === "fail").length;
   if (stopped) toast("Stopped. What was left is still queued; press Run to go on.");
-  else toast(failed ? `${failed} failed — details under each file` : "All done. Originals untouched.");
+  else if (failed) toast(`${failed} failed — details under each file`, 6000);
+  else toast("All done. Originals untouched.");
 }
 
 function onProgress({ payload }) {
@@ -487,13 +551,15 @@ function renderDraft() {
   const items = state.draft.map((step, i) => {
     const tool = toolById(step.tool);
     const onChange = (k, v) => (step.params[k] = v);
-    const x = h("button", { type: "button", class: "x", "aria-label": "Remove step", onclick: () => (state.draft.splice(i, 1), renderDraft()) }, "×");
+    const x = h("button", { type: "button", class: "x", "aria-label": `Remove ${tool.name}`, onclick: () => removeStep(i) }, "×");
+    // A password is asked for when the chain runs, never saved with it.
+    const shown = { ...tool, params: tool.params.filter((p) => p.key !== "password") };
     return h(
       "li",
       { style: `--c:${famColor(tool.family)}` },
       x,
       h("h4", {}, tool.name),
-      h("div", { class: "params" }, paramsForm(tool, step.params, onChange)),
+      h("div", { class: "params" }, paramsForm(shown, step.params, onChange)),
     );
   });
   $("chain-draft").replaceChildren(...items);
@@ -511,6 +577,20 @@ function renderAddStep() {
 /** `produces` is the previous tool's output extension with default params. */
 function takesOutputOf(next, prev) {
   return !next.accepts.length || next.accepts.includes(prev.produces);
+}
+
+/** Removing a step can leave the next one unable to take what now comes before it: cut there. */
+function removeStep(i) {
+  state.draft.splice(i, 1);
+  const bad = state.draft.findIndex((s, j) => {
+    const prev = j && toolById(state.draft[j - 1].tool);
+    return prev && (prev.output !== "file" || !takesOutputOf(toolById(s.tool), prev));
+  });
+  if (bad > 0) {
+    const cut = state.draft.splice(bad).map((s) => toolById(s.tool).name);
+    toast(`Also removed ${cut.join(", ")}: it can't take what comes before it any more.`, 6000);
+  }
+  renderDraft();
 }
 
 function addStep() {
@@ -535,25 +615,32 @@ function saveChain() {
 
 function chainCard(chain, i) {
   const route = chain.steps.map((s) => toolById(s.tool)?.name ?? s.tool).join(" → ");
+  const broken = chain.steps.some((s) => !toolById(s.tool));
+  // Two presses to remove: the first one arms the button for a few seconds.
   const del = (e) => {
-    e.stopPropagation();
+    const btn = e.currentTarget;
+    if (!btn.classList.contains("armed")) {
+      btn.classList.add("armed");
+      btn.textContent = "remove for good?";
+      return setTimeout(() => btn.isConnected && (btn.classList.remove("armed"), (btn.textContent = "remove")), 3000);
+    }
     state.chains = state.chains.filter((c) => c.id !== chain.id);
     save("remise.chains", state.chains);
     renderChains();
     renderRail();
   };
-  return h(
+  const card = h(
     "button",
-    { type: "button", class: "hook", style: `--r:${tilt(chain.id)}deg;--i:${i}`, onclick: () => openChain(chain) },
+    { type: "button", class: broken ? "hook off" : "hook", "data-id": chain.id, style: `--r:${tilt(chain.id)}deg;--i:${i}`, onclick: () => openChain(chain) },
     h(
       "div",
       { class: "tagbody" },
       h("span", { class: "fam" }, "chain"),
       h("h3", {}, chain.name),
       h("p", { class: "route" }, route),
-      h("span", { class: "needs", onclick: del }, "remove"),
     ),
   );
+  return h("div", { class: "chain-card" }, card, h("button", { type: "button", class: "remove", "aria-label": `Remove ${chain.name}`, onclick: del }, "remove"));
 }
 
 function renderChains() {
@@ -564,15 +651,32 @@ function renderChains() {
 
 /* ───────────────────────── views & drag-drop ───────────────────────── */
 
+/** Switch views. A running bench can't be left: its rows and Stop button live there. */
 function show(view) {
+  const prev = state.view;
+  if (prev === "bench" && view !== "bench" && state.bench.running) return toast("Still running: wait for it, or press Stop first.");
+  const back = prev === "bench" && benchHasFocus();
+  if (prev === "wall") state.wallScroll = $("main").scrollTop;
   state.view = view;
-  $("wall").hidden = view !== "wall";
-  $("bench").hidden = view !== "bench";
-  $("chains").hidden = view !== "chains";
+  for (const v of ["wall", "bench", "chains"]) $(v).hidden = v !== view;
+  paintView(view, prev);
+  renderRail();
+  if (back) refocusCard(view);
+}
+
+/** Back on the wall from a tool, it is scrolled where it was; anything else starts at the top. */
+function paintView(view, prev) {
   if (view === "wall") renderWall();
   if (view === "chains") (renderDraft(), renderChains());
-  $("main").scrollTop = 0;
-  renderRail();
+  $("main").scrollTop = view === "wall" && prev === "bench" ? state.wallScroll : 0;
+}
+
+const benchHasFocus = () => document.activeElement === document.body || $("bench").contains(document.activeElement);
+
+/** Back from a bench by keyboard or the Back button: land on the card it was opened from. */
+function refocusCard(view) {
+  const from = state.bench.tool ? state.bench.tool.id : state.bench.chain.id;
+  $(view).querySelector(`[data-id="${CSS.escape(from)}"]`)?.focus({ preventScroll: true });
 }
 
 function onDrag({ payload }) {
@@ -586,8 +690,11 @@ function onDrag({ payload }) {
 }
 
 function onDrop(paths) {
-  if (state.view === "bench" && !state.bench.running) return addFiles(paths);
+  if (state.view === "bench") return state.bench.running ? toast("Wait for the run to finish, then drop more.") : addFiles(paths);
   if (state.view !== "wall") return toast("Open a tool or a chain, then drop");
+  // Files in hand: look across the whole wall, not just the family or search in force.
+  state.family = "all";
+  state.query = $("search").value = "";
   state.dropped = paths;
   const fitting = visibleTools();
   if (fitting.length === 1) return openTool(fitting[0], paths);
@@ -603,23 +710,28 @@ function onKey(e) {
   if (e.key === "/" && document.activeElement.tagName !== "INPUT") {
     e.preventDefault();
     $("search").focus();
-  } else if (e.key === "Escape" && state.view !== "wall" && !state.bench?.running) {
-    show("wall");
+  } else if (e.key === "Escape" && state.view !== "wall" && !["INPUT", "SELECT"].includes(e.target.tagName)) {
+    goBack();
   }
 }
+
+/** A chain's bench goes back to the chains, a tool's to the wall. */
+const goBack = () => show(state.view === "bench" && state.bench.chain ? "chains" : "wall");
 
 async function init() {
   state.tools = await invoke("list_tools");
   state.downloads = await invoke("downloads");
   $("tool-count").textContent = state.tools.length;
   $("search").addEventListener("input", (e) => {
+    if (state.view === "bench" && state.bench.running) return ((e.target.value = state.query), show("wall"));
     state.query = e.target.value;
     if (state.view !== "wall") show("wall");
     else renderWall();
   });
-  $("back").addEventListener("click", () => show(state.bench?.chain ? "chains" : "wall"));
+  $("back").addEventListener("click", goBack);
   $("browse").addEventListener("click", browse);
-  $("run").addEventListener("click", runAll);
+  // Run turns into Stop under the pointer: a double click must not stop what it just started.
+  $("run").addEventListener("click", (e) => e.detail > 1 || runAll());
   $("clear").addEventListener("click", () => {
     if (state.bench.running) return;
     state.bench.rows = [];

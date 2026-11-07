@@ -24,7 +24,10 @@
   --ink-2: #5e5345;
   --line: #c6b38c;
   --accent: #e0431a;
-  --ok: #3b7a2a;
+  /* accent where it carries text: 4.5:1 or more against the paper and under white */
+  --accent-ink: #ad3818;
+  --on-accent: #fff;
+  --ok: #356726;
   --shadow: rgba(60, 40, 10, 0.28);
   --pdf: #d2401f;
   --image: #17867b;
@@ -49,6 +52,8 @@
     --ink-2: #ab9f88;
     --line: #3d372d;
     --accent: #ff6a3d;
+    --accent-ink: #ff6a3d;
+    --on-accent: #191712;
     --ok: #8fca6c;
     --shadow: rgba(0, 0, 0, 0.55);
     --pdf: #ff6b4a;
@@ -268,6 +273,11 @@ main {
   transition: transform 0.4s ease-out;
 }
 
+/* after the first paint, filtering shows cards at once */
+.wall.settled .hook {
+  animation: none;
+}
+
 .hook:hover .tagbody,
 .hook:focus-visible .tagbody {
   transform: rotate(calc(var(--r, 0deg) * -1)) translateY(-2px);
@@ -337,10 +347,11 @@ main {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--c);
+  color: color-mix(in srgb, var(--c) 70%, var(--ink));
 }
 
 .hook h3 {
+  overflow-wrap: anywhere;
   margin: 4px 0 6px;
   font-size: 19px;
   line-height: 1.05;
@@ -370,7 +381,7 @@ main {
 
 .hook.off h3,
 .hook.off p {
-  opacity: 0.55;
+  opacity: 0.75;
 }
 
 .hook .needs {
@@ -441,7 +452,7 @@ main {
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--c, var(--ink-2));
+  color: color-mix(in srgb, var(--c, var(--ink-2)) 70%, var(--ink));
 }
 
 .card h2 {
@@ -450,6 +461,31 @@ main {
   line-height: 1;
   font-weight: 800;
   letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+/* focused on open so the keyboard starts on the bench, not at the top of the page */
+#bench-title:focus {
+  outline: none;
+}
+
+.params:not(:empty) + .chain-steps {
+  margin-top: 18px;
+}
+
+.bench-note {
+  margin: 12px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--ink-2);
+  user-select: text;
+}
+
+.bench-note.err {
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
 }
 
 .blurb {
@@ -591,7 +627,7 @@ main {
 }
 
 .files .fail .st {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .files .err {
@@ -692,8 +728,8 @@ main {
   padding: 11px 26px;
   border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-ink);
+  color: var(--on-accent);
   font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -719,6 +755,11 @@ main {
   background: none;
   font-weight: 600;
   cursor: pointer;
+}
+
+.ghost:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* ─────────────── chains ─────────────── */
@@ -766,7 +807,7 @@ main {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--c, var(--ink));
+  background: color-mix(in srgb, var(--c, var(--ink)) 60%, var(--ink));
   color: var(--paper);
   font-family: var(--mono);
   font-size: 11px;
@@ -814,6 +855,35 @@ main {
 
 .chain-list .hook {
   --c: var(--chain);
+  width: 100%;
+}
+
+.chain-card {
+  position: relative;
+}
+
+.chain-card .remove {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 2px 8px;
+  border: 1px dashed var(--ink-2);
+  border-radius: 4px;
+  background: var(--tag);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.chain-card .remove.armed {
+  border-style: solid;
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+}
+
+.chain-list .tagbody {
+  padding-bottom: 40px;
 }
 
 .chain-list .route {
@@ -853,11 +923,15 @@ main {
 
 .toast {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 22px;
-  transform: translateX(-50%);
+  width: fit-content;
+  max-width: min(560px, calc(100% - 32px));
+  margin: 0 auto;
   padding: 10px 18px;
-  border-radius: 999px;
+  border-radius: 18px;
+  text-align: center;
   background: var(--ink);
   color: var(--paper);
   font-family: var(--mono);

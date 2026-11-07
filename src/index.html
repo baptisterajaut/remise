@@ -24,12 +24,12 @@
     <main id="main">
       <section id="wall" class="wall" aria-label="Tools"></section>
 
-      <section id="bench" class="bench" hidden aria-live="polite">
+      <section id="bench" class="bench" hidden aria-label="Bench">
         <button class="back" id="back" type="button">&larr; back to the wall</button>
         <div class="bench-grid">
           <div class="card spec">
             <p class="eyebrow" id="bench-family"></p>
-            <h2 id="bench-title"></h2>
+            <h2 id="bench-title" tabindex="-1"></h2>
             <p class="blurb" id="bench-blurb"></p>
             <form id="params" class="params" onsubmit="return false"></form>
             <div id="chain-steps" class="chain-steps" hidden></div>
@@ -40,6 +40,7 @@
               <p class="accepts" id="accepts"></p>
             </div>
             <ol id="files" class="files"></ol>
+            <p id="bench-note" class="bench-note" hidden></p>
             <div class="actions">
               <button type="button" class="ghost" id="clear">Clear</button>
               <button type="button" class="go" id="run">Run</button>
