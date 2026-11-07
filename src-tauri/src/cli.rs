@@ -27,10 +27,26 @@ pub fn wanted(args: &[String]) -> bool {
     args.first().is_some_and(|a| !a.starts_with("-psn_") && !Path::new(a).exists())
 }
 
+/// The AppImage's AppRun moves into `$APPDIR/usr` before starting Remise, so relative paths and
+/// results would land inside the app. The runtime keeps the folder it was started from in `OWD`
+/// when it mounts the image; extracting (APPIMAGE_EXTRACT_AND_RUN) sets no `OWD`, but `chdir`
+/// leaves the shell's `PWD` alone.
+/// CBA: PWD is wrong when the caller changed folder without a shell (a script's subprocess
+/// `cwd=`) and the image was extracted, not mounted; only `OWD` from the runtime is exact.
+pub fn undo_apprun_chdir() {
+    let Some(appdir) = std::env::var_os("APPDIR").filter(|_| std::env::var_os("APPIMAGE").is_some()) else { return };
+    if !std::env::current_dir().is_ok_and(|d| d.starts_with(&appdir)) {
+        return;
+    }
+    if let Some(dir) = ["OWD", "PWD"].into_iter().filter_map(std::env::var_os).map(PathBuf::from).find(|d| d.is_dir()) {
+        let _ = std::env::set_current_dir(dir);
+    }
+}
+
 pub fn main(args: &[String], package: &tauri::PackageInfo, identifier: &str) -> i32 {
     // The same folders the app gets from Tauri: resources beside (or inside) the executable,
     // downloads under the per-user data dir. REMISE_VENDOR / REMISE_USER_TOOLS still win.
-    let resources = tauri::utils::platform::resource_dir(package, &tauri::Env::default()).ok();
+    let resources = tauri::utils::platform::resource_dir(package, &tauri::Env::default()).ok().or_else(macos_resources);
     bins::set_vendor(resources.map(|d| d.join("vendor")));
     bins::set_user_tools(dirs::data_local_dir().map(|d| d.join(identifier).join("tools")));
     on_ctrl_c();
@@ -41,6 +57,13 @@ pub fn main(args: &[String], package: &tauri::PackageInfo, identifier: &str) -> 
             2
         }
     }
+}
+
+/// Tauri refuses a macOS executable path with a symlink in it (`/var` → `/private/var`, or a
+/// link put in /usr/local/bin): the real path still finds Contents/Resources.
+fn macos_resources() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    cfg!(target_os = "macos").then(|| exe.parent()?.join("../Resources").canonicalize().ok()).flatten()
 }
 
 /// Ok(exit code) once something ran; Err(message) for a usage error.

@@ -204,6 +204,7 @@ async fn download(app: AppHandle, bin: String) -> Result<(), String> {
 
 /// The app, or the command line when there are arguments that aren't files to open.
 pub fn start(args: &[String]) {
+    cli::undo_apprun_chdir();
     let context = tauri::generate_context!();
     if cli::wanted(args) {
         std::process::exit(cli::main(args, context.package_info(), &context.config().identifier));

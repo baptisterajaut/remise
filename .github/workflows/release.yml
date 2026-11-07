@@ -118,7 +118,10 @@ jobs:
           cd "$(mktemp -d)"
           "$app" list | grep -q '^  pdf-compress '
           qr=$("$app" create-qr --text hello --format png)
-          jpg=$("$app" img-convert --format jpg "$qr")
+          # In this folder, not inside the app (its AppRun changes folder), and a relative input
+          # found from here.
+          [ "$qr" = "$PWD/remise.qr.png" ] || { echo "wrote $qr instead of $PWD/remise.qr.png"; exit 1; }
+          jpg=$("$app" img-convert --format jpg remise.qr.png)
           echo "$qr -> $jpg"
           test -s "$jpg"
       # Tauri writes zlib disk images; lzma (ULMO, macOS 10.15+, and Remise needs 11) makes them

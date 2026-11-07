@@ -5,6 +5,8 @@ description = "Local file tools: PDF, image, video, audio, archives"
 authors = ["Baptiste Rajaut"]
 edition = "2024"
 license = "MIT"
+# Two binaries with cli-wrapper (remise-cli on Windows): `tauri build` must know which is the app.
+default-run = "remise"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
