@@ -2,7 +2,7 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWebview } = window.__TAURI__.webview;
 const { open: openDialog } = window.__TAURI__.dialog;
-const { revealItemInDir } = window.__TAURI__.opener;
+const { revealItemInDir, openUrl } = window.__TAURI__.opener;
 
 const FAMILIES = [
   ["all", "Everything", "var(--ink)"],
@@ -66,6 +66,8 @@ const state = {
   wallScroll: 0,
   chains: load("remise.chains", []),
   draft: [],
+  settingsTab: load("remise.settingsTab", "about"),
+  about: null, // version, bundled programs, where the command line is
 };
 
 /* ───────────────────────── helpers ───────────────────────── */
@@ -532,6 +534,7 @@ async function runAll() {
 function onProgress({ payload }) {
   if (payload.job.startsWith("dl-")) {
     if (state.fetching) state.fetching.pct = payload.pct;
+    if (state.view === "settings") renderSettings();
     return state.bench && renderRows();
   }
   const r = state.bench?.rows.find((x) => x.id === payload.job);
@@ -649,6 +652,128 @@ function renderChains() {
   $("chain-list").replaceChildren(...cards);
 }
 
+/* ───────────────────────── settings ───────────────────────── */
+
+const REPO = "https://github.com/baptisterajaut/remise";
+const TABS = [
+  ["about", "About"],
+  ["downloads", "Downloads"],
+  ["cli", "Command line"],
+];
+
+async function openSettings() {
+  show("settings");
+  if (state.view !== "settings") return;
+  [state.about, state.downloads] = await Promise.all([state.about ?? invoke("about"), invoke("downloads")]);
+  renderSettings();
+}
+
+function renderSettings() {
+  const tab = ([id, label]) =>
+    h("button", { type: "button", role: "tab", "data-focus": `tab-${id}`, "aria-selected": state.settingsTab === id, onclick: () => pickTab(id) }, label);
+  const panel = { about: aboutPanel, downloads: downloadsPanel, cli: cliPanel }[state.settingsTab] ?? aboutPanel;
+  keepFocus($("settings"), () => {
+    $("settings-tabs").replaceChildren(...TABS.map(tab));
+    $("settings-panel").replaceChildren(...(state.about ? panel(state.about).filter(Boolean) : [h("p", { class: "hint" }, "…")]));
+  });
+}
+
+function pickTab(id) {
+  state.settingsTab = id;
+  save("remise.settingsTab", id);
+  renderSettings();
+}
+
+const extLink = (label, url) => h("button", { type: "button", class: "link", onclick: () => openUrl(url) }, label);
+
+function aboutPanel(a) {
+  const credits = a.bundled.map(([name, licence]) => h("li", {}, h("b", {}, name), licence && h("span", {}, licence)));
+  return [
+    h("h2", {}, "remise"),
+    h("p", { class: "blurb" }, `Version ${a.version}. Free software under the MIT licence. Every tool runs on this computer: nothing is uploaded.`),
+    h("p", { class: "links" }, extLink("Source code", REPO), extLink("Releases and changes", `${REPO}/releases`), extLink("Report a problem", `${REPO}/issues`)),
+    h("h3", {}, "Programs inside"),
+    credits.length
+      ? h("ul", { class: "credits" }, credits)
+      : h("p", { class: "hint" }, "None in this build: the tools use what is installed on the computer."),
+    a.credits && h("button", { type: "button", class: "ghost", onclick: () => revealItemInDir(a.credits) }, "Licences and sources"),
+  ];
+}
+
+function downloadsPanel() {
+  const rows = Object.entries(state.downloads)
+    .sort(([, x], [, y]) => x.name.localeCompare(y.name))
+    .map(([bin, d]) => downloadRow(bin, d));
+  return [
+    h("p", { class: "blurb" }, "Big programs and models a few tools need, downloaded the first time you use one. Remove one to get the space back: its tools offer the download again."),
+    rows.length ? h("ul", { class: "dl-list" }, rows) : h("p", { class: "hint" }, "Nothing to download on this system."),
+  ];
+}
+
+const DL_STATE = { downloaded: "downloaded", present: "already on this computer", missing: "not downloaded" };
+
+function downloadRow(bin, d) {
+  const busy = Boolean(state.fetching) || Boolean(state.bench?.running);
+  const mine = state.fetching?.bins.includes(bin);
+  const status = mine ? `downloading… ${Math.round((state.fetching.pct ?? 0) * 100)} %` : DL_STATE[d.state];
+  const act = (label, run) => h("button", { type: "button", class: "ghost", "data-focus": `${label}-${bin}`, disabled: busy, onclick: run }, label);
+  return h(
+    "li",
+    {},
+    h("span", { class: "name" }, d.name.replace(/^the /, "").replace(/^./, (c) => c.toUpperCase())),
+    h("span", { class: "st" }, `${d.mb} MB · ${status}`),
+    d.state === "downloaded" && act("Remove", () => settingsJob(() => invoke("remove_download", { bin }), "Removed. Its tools will offer the download again.")),
+    d.state === "missing" && act("Download", () => ((state.fetching = { bins: [bin], pct: 0 }), settingsJob(() => invoke("download", { bin }), "Downloaded."))),
+  );
+}
+
+/** A download or removal from Settings, then the wall and any open bench catch up with it. */
+async function settingsJob(work, done) {
+  renderSettings();
+  try {
+    await work();
+    toast(done);
+  } catch (e) {
+    toast(String(e), 6000);
+  }
+  state.fetching = null;
+  [state.tools, state.downloads] = await Promise.all([invoke("list_tools"), invoke("downloads")]);
+  if (state.bench?.tool) state.bench.tool = toolById(state.bench.tool.id);
+  if (state.view === "settings") renderSettings();
+}
+
+function cliPanel(a) {
+  if (!a.command) return [h("p", { class: "hint" }, "This build has no command line.")];
+  const win = /Win/.test(navigator.userAgent);
+  const onPath = win || a.command === "/usr/bin/remise";
+  const quoted = /\s/.test(a.command) ? `"${a.command}"` : a.command;
+  const name = onPath ? "remise" : quoted;
+  const rc = /Mac/.test(navigator.userAgent) ? "~/.zshrc" : "~/.bashrc";
+  const intro = win
+    ? "Type remise in a terminal, if you said yes when the installer offered it (open a new terminal afterwards). Otherwise use the full path:"
+    : onPath
+      ? "Type remise in a terminal. It is this program:"
+      : "Use the full path below in a terminal, or give it a short name once:";
+  return [
+    h("p", { class: "blurb" }, "The same tools, from a terminal: for scripts, many files at once, or a server over SSH."),
+    h("p", {}, intro),
+    h("div", { class: "path" }, h("code", {}, a.command), h("button", { type: "button", class: "ghost", onclick: () => copy(a.command) }, "Copy")),
+    !onPath && h("pre", { class: "code" }, `echo "alias remise='${a.command}'" >> ${rc}`),
+    h("h3", {}, "Try"),
+    h("pre", { class: "code" }, [`${name} list`, `${name} help pdf-compress`, `${name} pdf-compress --level screen *.pdf`].join("\n")),
+    h("p", { class: "hint" }, "Results land next to each file, as in the app. Passwords go in REMISE_PASSWORD, never on the command line."),
+  ];
+}
+
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Copied.");
+  } catch {
+    toast("Couldn't copy here: select the text and copy it.");
+  }
+}
+
 /* ───────────────────────── views & drag-drop ───────────────────────── */
 
 /** Switch views. A running bench can't be left: its rows and Stop button live there. */
@@ -658,7 +783,7 @@ function show(view) {
   const back = prev === "bench" && benchHasFocus();
   if (prev === "wall") state.wallScroll = $("main").scrollTop;
   state.view = view;
-  for (const v of ["wall", "bench", "chains"]) $(v).hidden = v !== view;
+  for (const v of ["wall", "bench", "chains", "settings"]) $(v).hidden = v !== view;
   paintView(view, prev);
   renderRail();
   if (back) refocusCard(view);
@@ -668,6 +793,7 @@ function show(view) {
 function paintView(view, prev) {
   if (view === "wall") renderWall();
   if (view === "chains") (renderDraft(), renderChains());
+  if (view === "settings") renderSettings();
   $("main").scrollTop = view === "wall" && prev === "bench" ? state.wallScroll : 0;
 }
 
@@ -729,6 +855,8 @@ async function init() {
     else renderWall();
   });
   $("back").addEventListener("click", goBack);
+  $("gear").addEventListener("click", openSettings);
+  $("settings-back").addEventListener("click", () => show("wall"));
   $("browse").addEventListener("click", browse);
   // Run turns into Stop under the pointer: a double click must not stop what it just started.
   $("run").addEventListener("click", (e) => e.detail > 1 || runAll());

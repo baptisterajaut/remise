@@ -284,3 +284,12 @@ fn clean_up_needs_something_to_do_and_reads_the_file_first() {
     assert!(matches!(&job("aud-cleanup", &["/a.wav"], &[("pauses", "off"), ("denoise", "off")])[..], [Step::Fail(_)]));
     assert!(matches!(&job("aud-cleanup", &["/a.wav"], &[])[..], [Step::Probe(..), Step::Then(_)]));
 }
+
+#[test]
+fn about_lists_bundled_programs_with_their_licence() {
+    let md = "# Third-party programs\n\nIntro.\n\n## qpdf 12.4.2\n\n- Licence: Apache-2.0\n- Binary: https://x\n\n## Pandoc 3.9\n";
+    let want = vec![("qpdf 12.4.2".to_string(), "Apache-2.0".to_string()), ("Pandoc 3.9".to_string(), String::new())];
+    assert_eq!(crate::third_party(md), want);
+    let real = crate::third_party(&std::fs::read_to_string("../vendor/THIRD_PARTY.md").unwrap_or_default());
+    assert!(real.iter().all(|(name, licence)| !name.is_empty() && !licence.is_empty()), "{real:?}");
+}

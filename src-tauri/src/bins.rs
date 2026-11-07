@@ -24,7 +24,7 @@ pub fn set_vendor(dir: Option<PathBuf>) {
     let _ = VENDOR.set(dir);
 }
 
-fn vendor() -> Option<&'static Path> {
+pub fn vendor() -> Option<&'static Path> {
     VENDOR.get_or_init(|| std::env::var_os("REMISE_VENDOR").map(PathBuf::from)).as_deref()
 }
 

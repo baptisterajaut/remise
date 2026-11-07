@@ -91,7 +91,7 @@ Where the command lives:
 - **Mac:** `/Applications/Remise.app/Contents/MacOS/remise`. Make an alias to it, or a link in a folder on your PATH.
 - **Linux:** the AppImage itself, e.g. `./Remise.AppImage list`.
 
-It is the same program as the app, so on Linux it still needs the libraries the app uses (WebKitGTK), even when nothing opens a window.
+The app's Settings (the gear, top right) show the exact path under *Command line*, with a Copy button. It is the same program as the app, so on Linux it still needs the libraries the app uses (WebKitGTK), even when nothing opens a window.
 
 ## What's inside
 

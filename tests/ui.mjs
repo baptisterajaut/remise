@@ -25,7 +25,9 @@ window.__TAURI__ = {
   core: {
     invoke: async (cmd, args) => {
       if (cmd === "list_tools") return ${manifest}.map((t) => ({ ...t, missing: window.__missing[t.id] ?? [] }));
-      if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129 } };
+      if (cmd === "downloads") return { chromium: { name: "Chromium", mb: 129, state: window.__dlState } };
+      if (cmd === "about") return { version: "0.2.0", bundled: [["qpdf 12.4.2", "Apache-2.0"]], credits: "/app/vendor/THIRD_PARTY.md", command: "/usr/bin/remise" };
+      if (cmd === "remove_download") return (window.__removed.push(args.bin), (window.__dlState = "missing"));
       if (cmd === "download") return window.__download(args);
       if (cmd === "stop") return window.__pending[args.job]?.("Stopped.");
       if (cmd === "preview") {
@@ -38,17 +40,19 @@ window.__TAURI__ = {
   event: { listen: async (name, cb) => { window.__listeners[name] = cb; return () => {}; } },
   webview: { getCurrentWebview: () => ({ onDragDropEvent: async (cb) => { window.__drag = cb; } }) },
   dialog: { open: async () => null },
-  opener: { revealItemInDir: async (p) => { window.__revealed = p; } },
+  opener: { revealItemInDir: async (p) => { window.__revealed = p; }, openUrl: async (u) => { window.__opened = u; } },
 };
 // HTML to PDF starts without a browser, which Remise can download.
 // A test can set what is missing for the next page load.
 window.__missing = JSON.parse(sessionStorage.getItem("missing")) ?? { "pdf-html": ["chromium"] };
 window.__downloads = [];
+window.__removed = [];
+window.__dlState = "missing";
 window.__download = ({ bin }) => new Promise((res, rej) => {
   if (window.__offline) return rej("curl: (6) Could not resolve host");
   window.__downloads.push(bin);
   window.__listeners.progress({ payload: { job: "dl-" + bin, step: 0, steps: 1, pct: 0.5 } });
-  setTimeout(() => { window.__missing = {}; res(); }, 150);
+  setTimeout(() => { window.__missing = {}; window.__dlState = "downloaded"; res(); }, 150);
 });
 window.__runs = [];
 window.__pending = {};
@@ -397,6 +401,29 @@ async function staleChainFlow(page) {
   assert.equal(await page.locator("#run").textContent(), "Needs Ghostscript");
 }
 
+async function settingsFlow(page, shot) {
+  await resetWall(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "About" }).click();
+  await page.waitForSelector(".credits li");
+  assert.match(await page.locator("#settings-panel").textContent(), /Version 0\.2\.0/);
+  await page.getByRole("button", { name: "Source code" }).click();
+  assert.equal(await page.evaluate(() => window.__opened), "https://github.com/baptisterajaut/remise");
+  await shot("settings");
+  await page.getByRole("tab", { name: "Downloads" }).click();
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.waitForFunction(() => window.__removed.includes("chromium"));
+  await page.getByRole("button", { name: "Download", exact: true }).waitFor();
+  await shot("settings-downloads");
+  await page.getByRole("tab", { name: "Command line" }).click();
+  await shot("settings-cli");
+  assert.match(await page.locator("#settings-panel .code").textContent(), /^remise list/);
+  assert.doesNotMatch(await page.locator("#settings-panel").textContent(), /false|null|undefined/);
+  await page.keyboard.press("Escape");
+  assert.ok(await page.locator("#wall").isVisible(), "Escape goes back to the wall");
+}
+
 for (const scheme of ["light", "dark"]) {
   const { browser, page, errors, shot } = await open(scheme);
   await shot("wall");
@@ -416,6 +443,7 @@ for (const scheme of ["light", "dark"]) {
   await wallAndRetryFlow(page);
   await chainEdgeFlow(page);
   await staleChainFlow(page);
+  await settingsFlow(page, shot);
   await browser.close();
   assert.deepEqual(errors, [], "no console errors");
   console.log(`ui ${scheme}: ok`);

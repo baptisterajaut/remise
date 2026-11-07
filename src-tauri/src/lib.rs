@@ -114,16 +114,78 @@ fn stop(job: String) {
 struct DownloadInfo {
     name: &'static str,
     mb: u64,
+    /// "downloaded" (by Remise, can be removed), "present" (bundled or installed on the system),
+    /// or "missing".
+    state: &'static str,
 }
 
 /// What a striped tool can fetch itself instead of asking for an install, by bin name.
 #[tauri::command]
 fn downloads() -> HashMap<&'static str, DownloadInfo> {
+    let state = |b| match (fetch::installed(b).is_some(), bins::available(b)) {
+        (true, _) => "downloaded",
+        (false, true) => "present",
+        _ => "missing",
+    };
     tools::all()
         .flat_map(|t| t.bins.iter())
         .filter_map(|b| fetch::find(b))
-        .map(|d| (d.bin, DownloadInfo { name: d.name, mb: d.bytes.div_ceil(1_000_000) }))
+        .map(|d| (d.bin, DownloadInfo { name: d.name, mb: d.bytes.div_ceil(1_000_000), state: state(d.bin) }))
         .collect()
+}
+
+/// Deletes a download (Settings → Downloads). Only names from the download list are accepted.
+#[tauri::command]
+async fn remove_download(bin: String) -> Result<(), String> {
+    let d = fetch::find(&bin).ok_or("nothing downloaded under that name")?;
+    tauri::async_runtime::spawn_blocking(move || fetch::remove(d)).await.map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize)]
+struct About {
+    version: String,
+    /// Name and version, licence: the programs in `vendor/`, from its THIRD_PARTY.md.
+    bundled: Vec<(String, String)>,
+    /// That file, with the source links and where the licence texts are.
+    credits: Option<String>,
+    /// Where the command line lives, as a terminal would type it.
+    command: Option<String>,
+}
+
+#[tauri::command]
+fn about(app: AppHandle) -> About {
+    let credits = bins::vendor().map(|v| v.join("THIRD_PARTY.md")).filter(|p| p.is_file());
+    let md = credits.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    About {
+        version: app.package_info().version.to_string(),
+        bundled: third_party(&md),
+        credits: credits.map(|p| tools::s(&p)),
+        command: command_path().map(|p| tools::s(&p)),
+    }
+}
+
+/// `## Name Version` headings and their `- Licence:` line.
+fn third_party(md: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for line in md.lines() {
+        if let Some(name) = line.strip_prefix("## ") {
+            out.push((name.trim().into(), String::new()));
+        } else if let (Some(licence), Some(last)) = (line.strip_prefix("- Licence: "), out.last_mut()) {
+            last.1 = licence.trim().into();
+        }
+    }
+    out
+}
+
+/// Windows: bin\remise.exe from the installer (remise-cli.exe in a build). Linux: the AppImage
+/// itself when run from one. Otherwise the app's own executable, which is the command line.
+fn command_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    if cfg!(windows) {
+        let dir = exe.parent()?;
+        return [dir.join("bin").join("remise.exe"), dir.join("remise-cli.exe")].into_iter().find(|p| p.is_file());
+    }
+    Some(std::env::var_os("APPIMAGE").map(PathBuf::from).unwrap_or(exe))
 }
 
 /// Downloads what `bin` needs; progress comes as job `dl-<bin>`.
@@ -158,7 +220,7 @@ fn run_app(context: tauri::Context) {
             bins::set_user_tools(app.path().app_local_data_dir().ok().map(|d| d.join("tools")));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_tools, run, stop, preview, downloads, download])
+        .invoke_handler(tauri::generate_handler![list_tools, run, stop, preview, downloads, download, remove_download, about])
         .run(context)
         .expect("error while running tauri application");
 }

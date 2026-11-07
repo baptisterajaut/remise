@@ -214,14 +214,26 @@ pub fn installed(bin: &str) -> Option<PathBuf> {
     Some(program(d, &bins::user_tools()?.join(d.bin))).filter(|p| p.is_file())
 }
 
+/// Deletes what was downloaded for `d`: the tools that need it ask for it again.
+pub fn remove(d: &Download) -> Result<(), String> {
+    let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = bins::user_tools().ok_or("no folder for downloaded tools")?.join(d.bin);
+    match fs::remove_dir_all(&dir) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(format!("can't remove {}: {e}", d.name)),
+        _ => Ok(()),
+    }
+}
+
 /// Downloads, checks and unpacks `d`; reports progress as job `dl-<bin>`.
 pub fn fetch(emit: Emit, d: &Download) -> Result<PathBuf, String> {
     fetch_into(emit, d, bins::user_tools().ok_or("no folder for downloaded tools")?)
 }
 
+/// One download or removal at a time: a second click must not write into the same .part, nor
+/// delete a folder a download is moving in.
+static BUSY: Mutex<()> = Mutex::new(());
+
 pub fn fetch_into(emit: Emit, d: &Download, root: &Path) -> Result<PathBuf, String> {
-    // One at a time: a second click must not write into the same .part.
-    static BUSY: Mutex<()> = Mutex::new(());
     let _busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(done) = Some(program(d, &root.join(d.bin))).filter(|p| p.is_file()) {
         return Ok(done);

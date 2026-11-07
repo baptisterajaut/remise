@@ -13,10 +13,18 @@
         <h1>remise</h1>
         <p class="tag">local file tools &mdash; <span id="tool-count">0</span> on the wall, <b>0 bytes uploaded</b></p>
       </div>
-      <label class="search">
-        <span class="sr">Search tools</span>
-        <input id="search" type="search" placeholder="find a tool…  ( / )" autocomplete="off" spellcheck="false" />
-      </label>
+      <div class="top-right">
+        <label class="search">
+          <span class="sr">Search tools</span>
+          <input id="search" type="search" placeholder="find a tool…  ( / )" autocomplete="off" spellcheck="false" />
+        </label>
+        <button type="button" class="gear" id="gear" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <nav class="rail" id="rail" aria-label="Families"></nav>
@@ -63,6 +71,15 @@
           <button type="button" class="go" id="chain-save">Save chain</button>
         </div>
         <div id="chain-list" class="chain-list"></div>
+      </section>
+
+      <section id="settings" class="settings" hidden aria-label="Settings">
+        <button class="back" id="settings-back" type="button">&larr; back to the wall</button>
+        <div class="card sheet">
+          <p class="eyebrow">Settings</p>
+          <div class="tabs" role="tablist" id="settings-tabs"></div>
+          <div id="settings-panel" class="panel" role="tabpanel"></div>
+        </div>
       </section>
     </main>
 
