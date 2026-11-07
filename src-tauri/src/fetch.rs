@@ -145,6 +145,44 @@ const OFFICE: &[Download] = &[Download {
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 const OFFICE: &[Download] = &[];
 
+/// yt-dlp (Unlicense; a PyInstaller build carrying its own Python): 18-41 MB that only Video
+/// downloader uses, and it updates itself (`-U`) in place once downloaded. QuickJS stays bundled.
+macro_rules! ytdlp {
+    ($asset:literal) => {
+        concat!("https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/", $asset)
+    };
+}
+#[cfg(target_os = "linux")]
+const YTDLP: &[Download] = &[Download {
+    bin: "yt-dlp",
+    name: "yt-dlp",
+    url: ytdlp!("yt-dlp_linux"),
+    sha256: "d8bd33fca9d5b23b5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f",
+    bytes: 40_569_080,
+    path: "yt-dlp",
+}];
+#[cfg(windows)]
+const YTDLP: &[Download] = &[Download {
+    bin: "yt-dlp",
+    name: "yt-dlp",
+    url: ytdlp!("yt-dlp.exe"),
+    sha256: "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555",
+    bytes: 17_880_111,
+    path: "yt-dlp.exe",
+}];
+// A universal binary: the same file for both Macs.
+#[cfg(target_os = "macos")]
+const YTDLP: &[Download] = &[Download {
+    bin: "yt-dlp",
+    name: "yt-dlp",
+    url: ytdlp!("yt-dlp_macos"),
+    sha256: "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40",
+    bytes: 37_180_736,
+    path: "yt-dlp",
+}];
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+const YTDLP: &[Download] = &[];
+
 /// Whisper "small": far better than "base" outside English, still quick on a laptop CPU. MIT.
 /// BiRefNet general lite, as converted to ONNX by rembg: clean edges on hair and products. MIT.
 const MODELS: &[Download] = &[
@@ -167,7 +205,7 @@ const MODELS: &[Download] = &[
 ];
 
 pub fn find(bin: &str) -> Option<&'static Download> {
-    BROWSER.iter().chain(EDITOR).chain(OFFICE).chain(MODELS).find(|d| d.bin == bin)
+    BROWSER.iter().chain(EDITOR).chain(OFFICE).chain(YTDLP).chain(MODELS).find(|d| d.bin == bin)
 }
 
 /// The downloaded file for `bin`, if it's there.

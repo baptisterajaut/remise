@@ -46,7 +46,7 @@ Set `REMISE_VENDOR=$PWD/vendor` to make the app or the smoke test use a vendored
 
 | | Windows | macOS | Linux AppImage |
 |---|---|---|---|
-| FFmpeg, qpdf, 7-Zip, Pandoc, Typst, yt-dlp + QuickJS, waifu2x | upstream builds | upstream builds | upstream builds |
+| FFmpeg, qpdf, 7-Zip, Pandoc, Typst, QuickJS (for yt-dlp), waifu2x | upstream builds | upstream builds | upstream builds |
 | Ghostscript (with its built-in Tesseract OCR) | upstream build | built from source | built from source |
 | ImageMagick | upstream portable build | built from source, with Homebrew's delegate libraries bundled | the official AppImage, unpacked |
 | whisper.cpp | upstream build | built from source | upstream build |
@@ -59,7 +59,7 @@ Set `REMISE_VENDOR=$PWD/vendor` to make the app or the smoke test use a vendored
 - **Remise's own code** is MIT-licensed.
 - **The bundled fonts**, Bricolage Grotesque and IBM Plex Mono, are under the SIL OFL 1.1.
 
-**yt-dlp updates itself.** On first use, the bundled copy is copied into the per-user tools folder, which is writable. Each download first tries `yt-dlp -U` there; if the update fails, the download carries on with the version already there.
+**yt-dlp updates itself.** It is downloaded on first use into the per-user tools folder, which is writable. Each video download first tries `yt-dlp -U` there; if the update fails, it carries on with the version already there.
 
 ## Downloaded on first use
 
@@ -71,6 +71,7 @@ Too big for every installer, so the tool's button offers the download, with its 
 | Whisper small, `q5_1` (MIT) | Transcribe | 190 MB |
 | LibreOffice 26.8.2 (MPL-2.0), from The Document Foundation's archive; the LibreItalia AppImage on Linux | Office to PDF | 299–376 MB |
 | PdfCraft 0.19.0 (MIT/Apache-2.0), portable builds | PDF Studio | 115–129 MB |
+| yt-dlp 2026.10.21 (Unlicense; its standalone build carries Python and its dependencies under their own licences) | Video downloader | 18–41 MB |
 | chrome-headless-shell 157 (BSD-3-Clause and others), from Chrome for Testing; macOS and Linux only | HTML to PDF / image, when no Chromium browser is installed | 105–128 MB |
 
 ## Known limits

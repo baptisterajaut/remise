@@ -316,6 +316,10 @@ fn smoke_downloads_then_use_them() {
         let pdf = go("pdf-html", &[&fx.html], &[], &fx.dir).unwrap();
         assert!(fs::read(&pdf[0]).unwrap().starts_with(b"%PDF"));
     }
+    // yt-dlp: a bare executable, no archive. Only --version: CI has no business on YouTube.
+    let ytdlp = crate::fetch::fetch(&|_| {}, crate::fetch::find("yt-dlp").unwrap()).unwrap();
+    assert!(crate::bins::which("yt-dlp") == Some(ytdlp.clone()));
+    assert!(command(&ytdlp).arg("--version").output().unwrap().status.success(), "yt-dlp runs once downloaded");
     crate::fetch::fetch(&|_| {}, crate::fetch::find("soffice").unwrap()).unwrap();
     let pdf = go("pdf-office", &[&fx.docx], &[], &fx.dir).unwrap();
     assert!(fs::read(&pdf[0]).unwrap().starts_with(b"%PDF"), "LibreOffice, downloaded and unpacked, converts");

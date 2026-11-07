@@ -97,6 +97,7 @@ A few tools need something too big to put in every download. The first time you 
 | Transcribe | a speech model, 190 MB |
 | Office to PDF | LibreOffice, 299 to 376 MB |
 | PDF Studio (annotate, sign, fill forms) | [PdfCraft](https://github.com/storytold/pdfcraft), 115 to 129 MB |
+| Video downloader | [yt-dlp](https://github.com/yt-dlp/yt-dlp), 18 to 41 MB |
 | HTML to PDF, HTML to image | Chromium, 105 to 128 MB, only on a Mac or Linux PC with no Chrome, Edge or Chromium |
 
 ## Questions

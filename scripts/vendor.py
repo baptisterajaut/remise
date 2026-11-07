@@ -69,9 +69,6 @@ POTRACE = dict(
 PANDOC = dict(name="Pandoc", version="3.12.1", license="GPL-2.0-or-later",
               source=f"{GH}/jgm/pandoc/archive/refs/tags/3.12.1.tar.gz")
 TYPST = dict(name="Typst", version="0.15.1", license="Apache-2.0", source=f"{GH}/typst/typst/archive/refs/tags/v0.15.1.tar.gz")
-YTDLP = dict(name="yt-dlp", version="2026.10.21",
-             license="Unlicense (the standalone build bundles Python and its dependencies under their own licences)",
-             source=f"{GH}/yt-dlp/yt-dlp/archive/refs/tags/2026.10.21.tar.gz")
 QJS = dict(name="QuickJS-NG", version="0.17.0", license="MIT",
            source=f"{GH}/quickjs-ng/quickjs/archive/refs/tags/v0.17.0.tar.gz")
 TESSDATA = "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0"
@@ -96,9 +93,9 @@ def upscaler(os_name, sha):
     return [Item(**WAIFU2X, url=f"{GH}/nihui/waifu2x-ncnn-vulkan/releases/download/20250915/{asset}", sha256=sha, picks=picks)]
 
 
-def documents(pandoc, typst, ytdlp, qjs):
-    """Pandoc + Typst (documents, Markdown → PDF) and yt-dlp + QuickJS (downloads), per platform.
-    Each argument is (asset name, sha256)."""
+def documents(pandoc, typst, qjs):
+    """Pandoc + Typst (documents, Markdown → PDF) and QuickJS for yt-dlp, per platform. Each
+    argument is (asset name, sha256). yt-dlp itself is downloaded on first use (fetch.rs)."""
     rel = lambda repo, tag, asset: f"{GH}/{repo}/releases/download/{tag}/{asset}"
     exe = ".exe" if pandoc[0].endswith(".zip") and "windows" in pandoc[0] else ""
     return [
@@ -106,8 +103,6 @@ def documents(pandoc, typst, ytdlp, qjs):
              picks=[(f"**/pandoc{exe}", "pandoc")] if exe else [("**/bin/pandoc", "pandoc")]),
         Item(**TYPST, url=rel("typst/typst", "v0.15.1", typst[0]), sha256=typst[1],
              picks=[(f"**/typst{exe}", "typst"), ("?**/LICENSE", "licenses/typst"), ("?**/NOTICE", "licenses/typst")]),
-        Item(**YTDLP, url=rel("yt-dlp/yt-dlp", "2026.10.21", ytdlp[0]), sha256=ytdlp[1],
-             picks=[(ytdlp[0], "yt-dlp", f"yt-dlp{exe}")], raw=True),
         # yt-dlp needs a JavaScript runtime for YouTube; QuickJS is the 2 MB one it supports.
         Item(**QJS, url=rel("quickjs-ng/quickjs", "v0.17.0", qjs[0]), sha256=qjs[1],
              picks=[(qjs[0], "quickjs", f"qjs{exe}")], raw=True),
@@ -255,7 +250,6 @@ PLATFORMS = {
     ] + documents(
         ("pandoc-3.12.1-windows-x86_64.zip", "6ef431cb20b2c24a0371fc19200dc49d452be54b1b5c9239f3462841ef53e587"),
         ("typst-x86_64-pc-windows-msvc.zip", "19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736"),
-        ("yt-dlp.exe", "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555"),
         ("qjs-windows-x86_64.exe", "2aeabf0092c3262d6b2609824418f7dd7ed1f1df939f73b2b15645230cac0d77"),
     ) + upscaler("windows", "7425be94b94e4c8f37a1e433ac0e0100c43790e2c37418f4b65d8235adfbdc87") + ocr_languages()
     + [onnxruntime("onnxruntime-win-x64-1.31.1.zip", "5869e26bb25314375f2d5ef1877e3ea06b1543d6c710e6e4a1ec2f7177ab4b2c",
@@ -270,7 +264,6 @@ PLATFORMS = {
     + documents(
         ("pandoc-3.12.1-arm64-macOS.zip", "c2146cf33a583f3ac93eccddf1bb662371d5cfcce1aad1c87ad860cca1435d46"),
         ("typst-aarch64-apple-darwin.tar.xz", "48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a"),
-        ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
         ("qjs-darwin-arm64", "8be3ddfe3397d2e692e4e1e8972ee9d032a0a580505d2f8b4ea528cf1b651c11"),
     ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42") + ocr_languages()
     + [onnxruntime("onnxruntime-osx-arm64-1.31.1.tgz", "2e1344a1926ee50eb25b38153cb6992c3567515aef0e677a1a520a1798896d6f",
@@ -288,7 +281,6 @@ PLATFORMS = {
     + documents(
         ("pandoc-3.12.1-x86_64-macOS.zip", "81ed3e2cfecf096df15d407152f89a684fd65221082b919963f738e977fad3bc"),
         ("typst-x86_64-apple-darwin.tar.xz", "7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa"),
-        ("yt-dlp_macos", "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40"),
         ("qjs-darwin-x86_64", "9e5e101b4fd13cda3204222ca9f8be35412c41dcdef3745829633b7a67245412"),
     ) + upscaler("macos", "a5b58b239eb3aa030db5464f6759637fe412d8c07891a4346ea57f708b514d42") + ocr_languages()
     + [onnxruntime("onnxruntime-osx-x86_64-1.23.2.tgz", "d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6",
@@ -316,7 +308,6 @@ PLATFORMS = {
     ] + documents(
         ("pandoc-3.12.1-linux-amd64.tar.gz", "d0c90410e90204c9ca83b8539fac5c7aed01fd537207e4585849f8abc5df20b8"),
         ("typst-x86_64-unknown-linux-musl.tar.xz", "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c"),
-        ("yt-dlp_linux", "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f"),
         ("qjs-linux-x86_64", "0bfc02511a9f549c28b53880d988fc7cd5d361e90c5e8afdfcd7dc6774ceace5"),
     ) + upscaler("linux", "848e0fba55657d34da90b775b8139e9806dc754798b029f95e106ba8850a731f") + ocr_languages()
     + [onnxruntime("onnxruntime-linux-x64-1.31.1.tgz", "c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9",

@@ -463,7 +463,7 @@ pub static TOOLS: &[Tool] = &[
         id: "vid-download",
         family: Family::Video,
         name: "Video downloader",
-        blurb: "Save a video from a link with yt-dlp (optional install).",
+        blurb: "Save a video from a link with yt-dlp.",
         bins: &["yt-dlp", "ffmpeg"],
         accepts: &[],
         inputs: Inputs::None,
@@ -484,32 +484,14 @@ pub static TOOLS: &[Tool] = &[
             }
             let template = format!("{}/%(title).80s.%(ext)s", s(&j.out).replace('%', "%%"));
             vec![
-                Step::Then(fresh_ytdlp),
+                // Sites change weekly: try an update first, carry on with what's there if it fails.
+                Step::Try(Box::new(Step::Run("yt-dlp", args!["-U"]))),
                 // QuickJS (bundled) runs YouTube's player code; deno/node are used instead if present.
                 Step::Run("yt-dlp", args!["--no-playlist", "--js-runtimes", "quickjs", "-f", j.p("quality"), "-o", template, "--", url]),
             ]
         },
     },
 ];
-
-/// Sites change weekly and the bundled yt-dlp is frozen at build time, inside a read-only app.
-/// First use copies it to the per-user tools dir, where `-U` can replace it; every run then tries
-/// an update and carries on with whatever it has if that fails (offline, distro-packaged yt-dlp).
-fn fresh_ytdlp(_: &Job) -> Result<Vec<Step>, String> {
-    let mut steps = Vec::new();
-    if let (Some(current), Some(user)) = (crate::bins::which("yt-dlp"), crate::bins::user_tools())
-        && crate::bins::is_bundled(&current)
-    {
-        // Copy under a temporary name, then rename: a half-copied yt-dlp must never look installed.
-        let name = current.file_name().ok_or("odd yt-dlp path")?;
-        let target = user.join("yt-dlp").join(name);
-        let part = target.with_extension("part");
-        steps.push(Step::Try(Box::new(Step::Copy(current.clone(), part.clone()))));
-        steps.push(Step::Try(Box::new(Step::Rename(part, target))));
-    }
-    steps.push(Step::Try(Box::new(Step::Run("yt-dlp", args!["-U"]))));
-    Ok(steps)
-}
 
 /// Equal-length parts with the segment muxer, stream copy.
 pub fn segment(j: &Job) -> Step {

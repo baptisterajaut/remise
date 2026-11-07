@@ -8,19 +8,14 @@ use std::sync::OnceLock;
 static VENDOR: OnceLock<Option<PathBuf>> = OnceLock::new();
 static USER_TOOLS: OnceLock<Option<PathBuf>> = OnceLock::new();
 
-/// A writable per-user tools dir (app data). Tools that must stay current (yt-dlp) are copied
-/// there from the bundle and update themselves; it is searched before the bundle.
+/// A writable per-user tools dir (app data), where fetch.rs puts downloads; yt-dlp updates
+/// itself there. It is searched before the bundle.
 pub fn set_user_tools(dir: Option<PathBuf>) {
     let _ = USER_TOOLS.set(std::env::var_os("REMISE_USER_TOOLS").map(PathBuf::from).or(dir));
 }
 
 pub fn user_tools() -> Option<&'static Path> {
     USER_TOOLS.get_or_init(|| std::env::var_os("REMISE_USER_TOOLS").map(PathBuf::from)).as_deref()
-}
-
-/// Whether `path` is one of the copies shipped inside the app.
-pub fn is_bundled(path: &Path) -> bool {
-    vendor().is_some_and(|v| path.starts_with(v))
 }
 
 /// Called once at startup with the app's bundled `vendor/` dir. `REMISE_VENDOR` wins (tests, dev).
