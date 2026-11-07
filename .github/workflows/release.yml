@@ -72,11 +72,12 @@ jobs:
           releaseBody: Local file tools. Pick the installer for your system; bundled third-party tools are listed in THIRD_PARTY.md inside the app.
           releaseDraft: true
           uploadWorkflowArtifacts: true
-          # Windows also ships remise-cli.exe, the console front of the command line.
+          # Windows also ships remise-cli.exe, the console front of the command line (installed as bin\remise.exe).
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --config src-tauri/tauri.vendor.conf.json ${{ runner.os == 'Windows' && '--features cli-wrapper' || '' }}
-      # The command line as installed, end to end: remise-cli.exe in front of the release
-      # Remise.exe (a GUI program: this is what the wrapper is for), bundled tools found through
-      # the installed resources, and the PATH entry added (/PATH) then removed by the uninstaller.
+      # The command line as installed, end to end: `remise` found on the PATH (/PATH) as
+      # bin\remise.exe, in front of the release Remise.exe (a GUI program: this is what the wrapper
+      # is for), bundled tools found through the installed resources, then the uninstaller taking
+      # bin\ and the PATH entry away.
       - name: Command line from the installer
         if: runner.os == 'Windows'
         shell: pwsh
@@ -84,22 +85,27 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $setup = (Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)[0].FullName
           Start-Process $setup -ArgumentList '/S', '/PATH' -Wait
-          $dir = Join-Path $env:LOCALAPPDATA 'Remise'
-          $cli = Join-Path $dir 'remise-cli.exe'
+          $root = Join-Path $env:LOCALAPPDATA 'Remise'
+          $dir = Join-Path $root 'bin'
           $onPath = { ((Get-ItemProperty HKCU:\Environment).Path -split ';') -contains $dir }
           if (-not (& $onPath)) { throw "$dir is not on the user PATH" }
-          if (-not ((& $cli list) -match '^  pdf-compress ')) { throw 'remise-cli list printed no pdf-compress' }
+          # What a new terminal sees: the user PATH first, so `remise` is bin\remise.exe.
+          $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path
+          $cli = (Get-Command remise).Source
+          if ($cli -ne (Join-Path $dir 'remise.exe')) { throw "remise resolves to $cli" }
+          if (-not ((remise list) -match '^  pdf-compress ')) { throw 'remise list printed no pdf-compress' }
           Push-Location (New-Item -ItemType Directory (Join-Path $env:RUNNER_TEMP 'cli'))
-          $qr = & $cli create-qr --text hello --format png
-          $jpg = & $cli img-convert --format jpg $qr
+          $qr = remise create-qr --text hello --format png
+          $jpg = remise img-convert --format jpg $qr
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $jpg)) { throw "img-convert gave: $jpg" }
           "$qr -> $jpg"
-          & $cli nope 2>$null
+          remise nope 2>$null
           if ($LASTEXITCODE -ne 2) { throw "a usage error exited with $LASTEXITCODE" }
           Pop-Location
           # _?= runs the uninstaller in place, so -Wait waits for it.
-          Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S', "_?=$dir" -Wait
+          Start-Process (Join-Path $root 'uninstall.exe') -ArgumentList '/S', "_?=$root" -Wait
           if (& $onPath) { throw "$dir is still on the user PATH" }
+          if (Test-Path $dir) { throw "$dir is still there" }
       - name: Command line from the AppImage
         if: runner.os == 'Linux'
         shell: bash

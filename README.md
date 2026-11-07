@@ -87,7 +87,7 @@ Results land next to each input, just like in the app. Tools that need no file (
 
 Where the command lives:
 
-- **Windows:** `remise-cli`. The installer offers to add it to your PATH. `remise` alone is the app's own program, which doesn't print to a terminal.
+- **Windows:** `remise`, once the installer has put it on your PATH (it asks; open a new terminal afterwards). It lives in the `bin` folder of the install, `%LOCALAPPDATA%\Remise\bin`.
 - **Mac:** `/Applications/Remise.app/Contents/MacOS/remise`. Make an alias to it, or a link in a folder on your PATH.
 - **Linux:** the AppImage itself, e.g. `./Remise.AppImage list`.
 

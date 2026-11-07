@@ -12,8 +12,8 @@ src-tauri/src/
   fetch.rs                first-use downloads (models, Chromium, PdfCraft, LibreOffice): pinned, checked, unpacked aside
   cutout.rs               `remise --cutout`: background removal with ONNX Runtime, run as a child process
   cli.rs                  `remise <tool> …`: the command line, in the same executable (main.rs picks)
-  bin/remise-cli.rs       Windows' console front for it (feature `cli-wrapper`, Windows builds only)
-windows/hooks.nsh         installer hooks: the optional PATH entry for remise-cli
+  bin/remise-cli.rs       Windows' console front for it, installed as bin\remise.exe (feature `cli-wrapper`, Windows builds only)
+windows/hooks.nsh         installer hooks: bin\remise.exe and its optional PATH entry
   tests/                  unit tests, the real-binary smoke test, and the manifest dump
 scripts/vendor.py         fetches the bundled binaries, pinned by URL + SHA-256, writes THIRD_PARTY.md
 scripts/build-deps.sh     builds what upstream ships no relocatable binary of (run by the deps workflow)
@@ -23,7 +23,7 @@ tests/ui.mjs              headless walk-through of the UI with a mocked Tauri br
 
 A tool is data: what it accepts, its parameters, and a pure function that turns a job (inputs, parameters, output path) into steps. A step is a command to run, a file to write, or a `Then` that decides the next steps from what earlier ones produced (a page size, a list of pages). Adding a tool means adding one `Tool { … }` entry to the right family file. The UI renders its parameters on its own, and the chain builder offers it wherever the previous step's output fits.
 
-The command line is the same executable: with arguments, unless the first one is an existing file (something to open), `main.rs` hands over to `cli.rs` before any window exists. It finds `vendor/` with the same Tauri function the app uses. On Windows the app is a GUI program, so a terminal neither waits for it nor shows its output; `remise-cli.exe` runs it with the terminal's handles, waits, passes the exit code back, and kills its process tree if the terminal goes away (job object). On Mac and Linux, Ctrl+C stops the running tool the way the Stop button does.
+The command line is the same executable: with arguments, unless the first one is an existing file (something to open), `main.rs` hands over to `cli.rs` before any window exists. It finds `vendor/` with the same Tauri function the app uses. On Windows the app is a GUI program, so a terminal neither waits for it nor shows its output; `remise-cli.exe`, installed as `bin\remise.exe` (a `remise.exe` next to `Remise.exe` would be the same file, Windows ignores case), runs it with the terminal's handles, waits, passes the exit code back, and kills its process tree if the terminal goes away (job object). On Mac and Linux, Ctrl+C stops the running tool the way the Stop button does.
 
 Commands are always spawned with an argument vector and never through a shell, because file names are user input. For the same reason, the UI builds every node with `textContent` and never uses `innerHTML`.
 
