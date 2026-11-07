@@ -261,9 +261,17 @@ main {
   animation-delay: calc(var(--i, 0) * 18ms);
 }
 
-.hook:hover,
-.hook:focus-visible {
-  animation: swing 0.9s ease-out both;
+/* The swing lives on the inner tag: swapping the hook's own animation would replay its entrance
+   (hidden for --i × 18 ms) every time the pointer leaves. */
+.tagbody {
+  transform-origin: 50% 8px;
+  transition: transform 0.4s ease-out;
+}
+
+.hook:hover .tagbody,
+.hook:focus-visible .tagbody {
+  transform: rotate(calc(var(--r, 0deg) * -1)) translateY(-2px);
+  animation: swing 0.9s ease-out;
 }
 
 .hook:focus-visible {
@@ -281,9 +289,10 @@ main {
   }
 }
 
+/* on top of the hook's tilt, which stays put: ends level */
 @keyframes swing {
   0% {
-    transform: rotate(var(--r, 0deg));
+    transform: none;
   }
   25% {
     transform: rotate(3deg) translateY(-2px);
@@ -295,7 +304,7 @@ main {
     transform: rotate(0.6deg) translateY(-2px);
   }
   100% {
-    transform: rotate(0deg) translateY(-2px);
+    transform: rotate(calc(var(--r, 0deg) * -1)) translateY(-2px);
   }
 }
 

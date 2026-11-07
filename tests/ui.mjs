@@ -106,6 +106,17 @@ async function toolFlow(page, shot) {
   assert.equal(await page.evaluate(() => window.__revealed), "/d/Q3.out.pdf");
 }
 
+// Hovering a tag must not replay its entrance (which starts hidden, after a per-tag delay).
+async function hoverFlow(page) {
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
+  const last = page.locator(".wall .hook").last();
+  await last.scrollIntoViewIfNeeded();
+  await last.hover();
+  await page.mouse.move(2, 2);
+  await page.waitForTimeout(80);
+  assert.equal(await last.evaluate((el) => getComputedStyle(el).opacity), "1", "a tag stays visible after the pointer leaves");
+}
+
 async function wallFlow(page, shot) {
   await page.keyboard.press("Escape");
   await page.evaluate(() => window.__drop(["/d/clip.mp4"]));
@@ -223,6 +234,7 @@ async function downloadFlow(page, shot) {
 for (const scheme of ["light", "dark"]) {
   const { browser, page, errors, shot } = await open(scheme);
   await shot("wall");
+  await hoverFlow(page);
   await toolFlow(page, shot);
   await wallFlow(page, shot);
   await chainFlow(page, shot);
