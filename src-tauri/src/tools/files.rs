@@ -7,7 +7,7 @@ pub static TOOLS: &[Tool] = &[
         id: "arc-create",
         family: Family::Files,
         name: "Create archive",
-        blurb: "Zip or 7z everything you drop.",
+        blurb: "Zip or 7z everything you drop. With a password, only 7z hides the file names.",
         bins: &["7z"],
         accepts: &[],
         inputs: Inputs::Many,
@@ -17,6 +17,8 @@ pub static TOOLS: &[Tool] = &[
         ],
         output: Output::File { suffix: "archive", ext: fmt },
         // AES-256 either way. 7z also hides the file names; a zip shows them to anyone.
+        // CBA: no ZipCrypto for "opens anywhere": bkcrack breaks it from a few known bytes. The
+        // cost is that the Mac's Archive Utility won't open an AES zip; 7-Zip/Keka will.
         build: |j| {
             if j.p("format") == "zip" && !j.p("password").is_ascii() {
                 // 7-Zip's answer is E_INVALIDARG: zip never said how to encode the rest.
