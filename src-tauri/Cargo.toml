@@ -1,6 +1,6 @@
 [package]
 name = "remise"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local file tools: PDF, image, video, audio, archives"
 authors = ["Baptiste Rajaut"]
 edition = "2024"
