@@ -72,6 +72,27 @@ A few more things to know:
 
 ![Compressing three videos: one done, one at 64 %, one waiting](docs/bench.png)
 
+### From a terminal
+
+The same tools work from the command line, which helps for scripts and for files on a server you reach over SSH:
+
+```sh
+remise list                                  # every tool
+remise help pdf-compress                     # what it takes, its options
+remise pdf-compress --level screen *.pdf     # one result per file, paths printed
+REMISE_PASSWORD=s3cret remise arc-create --format 7z notes.txt photos/
+```
+
+Results land next to each input, just like in the app. Tools that need no file (QR code, Gradient…) write to the current folder. Progress goes to the error output and the paths of the results to the standard output. The exit code is 0 when everything worked, 1 when a file failed, 2 when the command was wrong. Passwords are read from `REMISE_PASSWORD`, never from the command line, which other programs on the computer can read.
+
+Where the command lives:
+
+- **Windows:** `remise-cli`. The installer offers to add it to your PATH. `remise` alone is the app's own program, which doesn't print to a terminal.
+- **Mac:** `/Applications/Remise.app/Contents/MacOS/remise`. Make an alias to it, or a link in a folder on your PATH.
+- **Linux:** the AppImage itself, e.g. `./Remise.AppImage list`.
+
+It is the same program as the app, so on Linux it still needs the libraries the app uses (WebKitGTK), even when nothing opens a window.
+
 ## What's inside
 
 <details>
