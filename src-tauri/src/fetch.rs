@@ -157,7 +157,7 @@ const YTDLP: &[Download] = &[Download {
     bin: "yt-dlp",
     name: "yt-dlp",
     url: ytdlp!("yt-dlp_linux"),
-    sha256: "d8bd33fca9d5b23b5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f",
+    sha256: "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f",
     bytes: 40_569_080,
     path: "yt-dlp",
 }];

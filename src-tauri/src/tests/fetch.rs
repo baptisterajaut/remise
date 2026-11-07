@@ -108,3 +108,13 @@ fn skipped_links_alone_are_not_a_failure() {
     assert!(only_links_skipped("7z (exit status: 2): ERROR: Data Error : opt/x".into()).is_err());
     assert!(only_links_skipped("7z (exit status: 2): disk full".into()).is_err());
 }
+
+/// A typo in a pin only shows up as "checksum mismatch" on the user's first download.
+#[test]
+fn every_pin_is_a_sha256() {
+    for bin in ["chromium", "pdfcraft", "soffice", "yt-dlp", "bg-model", "whisper-model"] {
+        let Some(d) = crate::fetch::find(bin) else { continue };
+        assert!(d.sha256.len() == 64 && d.sha256.bytes().all(|b| b.is_ascii_hexdigit()), "{bin}: {}", d.sha256);
+        assert!(d.url.starts_with("https://") && d.bytes > 0, "{bin}");
+    }
+}
