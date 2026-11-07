@@ -27,6 +27,8 @@ pub fn stop(job: &str) {
 /// Ctrl+C in a terminal: every job stops. An atomic, so a signal handler may set it.
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
+/// Unix only: on Windows remise-cli.exe ends the whole process tree itself.
+#[cfg(unix)]
 pub fn interrupt() {
     INTERRUPTED.store(true, Ordering::Relaxed);
 }
