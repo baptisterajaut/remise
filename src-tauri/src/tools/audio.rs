@@ -182,4 +182,151 @@ pub static TOOLS: &[Tool] = &[
             vec![ffmpeg(j, args!["-filter_complex", fc, "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-c:a", "aac", "-shortest"])]
         },
     },
+    Tool {
+        id: "aud-cleanup",
+        family: Family::Audio,
+        name: "Clean up recording",
+        blurb: "Cuts the pauses and the hiss out of a voice memo, a lecture or a talking video.",
+        bins: &["ffmpeg"],
+        accepts: AV,
+        inputs: Inputs::One,
+        params: &[
+            Param::Select {
+                key: "pauses",
+                label: "Cut pauses",
+                options: &[("0.3", "Over 0.3 s"), ("0.5", "Over 0.5 s"), ("1", "Over 1 s"), ("off", "Keep them")],
+                default: "0.5",
+            },
+            Param::Select {
+                key: "level",
+                label: "Silence is",
+                options: &[("-40", "Below −40 dB (quiet room)"), ("-35", "Below −35 dB"), ("-30", "Below −30 dB (noisy room)")],
+                default: "-35",
+            },
+            Param::Select { key: "denoise", label: "Hiss", options: &[("on", "Reduce"), ("off", "Leave")], default: "on" },
+        ],
+        output: Output::File { suffix: "clean", ext: same },
+        build: |j| {
+            if j.p("pauses") == "off" && j.p("denoise") == "off" {
+                return vec![Step::Fail("nothing to do: cut the pauses, reduce the hiss, or both".into())];
+            }
+            media::probe_then(j, detect)
+        },
+    },
 ];
+
+/// Silence left on each side of a cut, so words don't start or end clipped.
+const MARGIN: f64 = 0.12;
+/// Fade at each join, so a cut never clicks.
+const FADE: f64 = 0.01;
+
+fn denoise(j: &Job) -> &'static str {
+    if j.p("denoise") == "on" { "afftdn," } else { "" }
+}
+
+/// Finds the pauses on the sound as it will come out (denoised first, when asked), into
+/// tmp/silences.txt. The file name stays relative (the step runs in tmp): a Windows path's
+/// `C:\` would need escaping inside a filter.
+fn detect(j: &Job) -> Result<Vec<Step>, String> {
+    let m = media::probed(j)?.remove(0);
+    if m.audio.is_none() {
+        return Err(format!("{} has no sound to clean up", j.input()));
+    }
+    if j.p("pauses") == "off" {
+        return Ok(render(j, &m, &[]));
+    }
+    let af = format!("{}silencedetect=n={}dB:d={},ametadata=mode=print:file=silences.txt", denoise(j), j.p("level"), j.p("pauses"));
+    let find = args!["-hide_banner", "-nostdin", "-y", "-i", j.input(), "-map", "0:a:0", "-af", af, "-f", "null", "-"];
+    Ok(vec![Step::RunIn(j.tmp.clone(), "ffmpeg", find), Step::Then(cut)])
+}
+
+fn cut(j: &Job) -> Result<Vec<Step>, String> {
+    let m = media::probed(j)?.remove(0);
+    let duration = m.duration.ok_or_else(|| format!("can't tell how long {} is", j.input()))?;
+    let keep = keeps(&j.read_tmp("silences.txt").unwrap_or_default(), duration, MARGIN);
+    match keep.as_slice() {
+        [] => Err("it's all silence (try a lower silence level)".into()),
+        [(a, b)] if *a == 0.0 && *b == duration => Ok(render(j, &m, &[])),
+        _ => Ok(render(j, &m, &keep)),
+    }
+}
+
+/// The stretches to keep, from silencedetect's `lavfi.silence_start=`/`_end=` lines: each
+/// pause shrinks by `margin` on both sides, except at the very start and end of the file.
+/// A pause still running at the end has no `_end`.
+pub fn keeps(silences: &str, duration: f64, margin: f64) -> Vec<(f64, f64)> {
+    let (mut gaps, mut start) = (Vec::new(), None);
+    for line in silences.lines().map(str::trim) {
+        if let Some(v) = line.strip_prefix("lavfi.silence_start=") {
+            start = v.parse::<f64>().ok();
+        } else if let (Some(v), Some(s)) = (line.strip_prefix("lavfi.silence_end="), start) {
+            gaps.extend(v.parse::<f64>().ok().map(|e| (s, e)));
+            start = None;
+        }
+    }
+    gaps.extend(start.map(|s| (s, duration)));
+    let (mut keep, mut from) = (Vec::new(), 0.0);
+    for (s, e) in gaps {
+        let a = if s <= margin { 0.0 } else { s + margin };
+        let b = if e >= duration - margin { duration } else { e - margin };
+        if b <= a {
+            continue;
+        }
+        if a > from {
+            keep.push((from, a));
+        }
+        from = b;
+    }
+    if from < duration {
+        keep.push((from, duration));
+    }
+    keep
+}
+
+/// No stretches: the picture is copied and only the sound is redone. Otherwise every stretch
+/// is trimmed out of the picture and the sound and joined back: `concat` lines the two up at
+/// each join (`select`/`aselect` drifted 0.45 s over 50 cuts). The graph goes in a file, a long
+/// lecture makes hundreds of stretches.
+fn render(j: &Job, m: &media::Media, keep: &[(f64, f64)]) -> Vec<Step> {
+    let mut a = args!["-hide_banner", "-nostdin", "-y", "-i", j.input()];
+    if keep.is_empty() {
+        if j.p("denoise") == "off" {
+            return vec![Step::Copy(j.inputs[0].clone(), j.out.clone())];
+        }
+        a.extend(args!["-c:v", "copy", "-af", "afftdn", j.out()]);
+        return vec![Step::Run("ffmpeg", a)];
+    }
+    // An audio file's picture is cover art, not something to cut.
+    let video = m.video.is_some() && VID.contains(&j.in_ext().as_str());
+    let graph = j.tmp.join("cut.txt");
+    a.extend(args!["-/filter_complex", s(&graph), "-map", "[a]"]);
+    if video {
+        a.extend(args!["-map", "[v]"]);
+        a.extend(super::video::codecs(j));
+    }
+    a.push(j.out());
+    vec![Step::Write(graph, cut_graph(denoise(j), keep, video)), Step::Run("ffmpeg", a)]
+}
+
+pub fn cut_graph(denoise: &str, keep: &[(f64, f64)], video: bool) -> String {
+    let n = keep.len();
+    let pads = |p: &str| (0..n).map(|i| format!("[{p}{i}]")).collect::<String>();
+    let mut g = format!("[0:a:0]{denoise}asplit={n}{};", pads("a"));
+    if video {
+        g += &format!("[0:v:0]split={n}{};", pads("v"));
+    }
+    let mut joined = String::new();
+    for (i, (from, to)) in keep.iter().enumerate() {
+        let out = (to - from - FADE).max(0.0);
+        g += &format!(
+            "[a{i}]atrim=start={from:.3}:end={to:.3},asetpts=PTS-STARTPTS,afade=t=in:d={FADE},afade=t=out:st={out:.3}:d={FADE}[x{i}];"
+        );
+        if video {
+            g += &format!("[v{i}]trim=start={from:.3}:end={to:.3},setpts=PTS-STARTPTS[w{i}];");
+            joined += &format!("[w{i}]");
+        }
+        joined += &format!("[x{i}]");
+    }
+    let outs = if video { "[v][a]" } else { "[a]" };
+    g + &format!("{joined}concat=n={n}:v={}:a=1{outs}", u8::from(video))
+}

@@ -1,6 +1,6 @@
 //! The pure helpers behind the newer tools.
 
-use crate::tools::{self, Job, Step, parse_areas, parse_date, pdf, ps_str};
+use crate::tools::{self, Job, Step, audio, parse_areas, parse_date, pdf, ps_str};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -257,4 +257,30 @@ fn qr_png_comes_from_the_module_grid() {
         std::fs::write(dir.join("qr.pbm"), &pbm).unwrap();
         std::fs::write(dir.join("scale.txt"), scale.to_string()).unwrap();
     }
+}
+
+#[test]
+fn pauses_shrink_by_the_margin_except_at_the_edges() {
+    let found = "frame:16 pts:65536 pts_time:1.48\nlavfi.silence_start=0\nlavfi.silence_end=1\nlavfi.silence_duration=1\n\
+                 lavfi.silence_start=2\nlavfi.silence_end=3.5\nlavfi.silence_start=5\n";
+    assert_eq!(audio::keeps(found, 6.0, 0.25), vec![(0.75, 2.25), (3.25, 5.25)]);
+    assert_eq!(audio::keeps("", 6.0, 0.1), vec![(0.0, 6.0)], "no pause, nothing cut");
+    assert_eq!(audio::keeps("lavfi.silence_start=1\nlavfi.silence_end=1.4\n", 6.0, 0.25), vec![(0.0, 6.0)], "too short to cut");
+    assert!(audio::keeps("lavfi.silence_start=0\n", 6.0, 0.1).is_empty(), "all silence");
+}
+
+#[test]
+fn cuts_join_picture_and_sound_together() {
+    let g = audio::cut_graph("afftdn,", &[(0.0, 1.0), (2.5, 4.0)], true);
+    assert!(g.starts_with("[0:a:0]afftdn,asplit=2[a0][a1];[0:v:0]split=2[v0][v1];"), "{g}");
+    assert!(g.contains("[v1]trim=start=2.500:end=4.000,setpts=PTS-STARTPTS[w1]"), "{g}");
+    assert!(g.contains("afade=t=out:st=1.490:d=0.01[x1]"), "{g}");
+    assert!(g.ends_with("[w0][x0][w1][x1]concat=n=2:v=1:a=1[v][a]"), "{g}");
+    assert!(audio::cut_graph("", &[(0.0, 1.0)], false).ends_with("[x0]concat=n=1:v=0:a=1[a]"));
+}
+
+#[test]
+fn clean_up_needs_something_to_do_and_reads_the_file_first() {
+    assert!(matches!(&job("aud-cleanup", &["/a.wav"], &[("pauses", "off"), ("denoise", "off")])[..], [Step::Fail(_)]));
+    assert!(matches!(&job("aud-cleanup", &["/a.wav"], &[])[..], [Step::Probe(..), Step::Then(_)]));
 }

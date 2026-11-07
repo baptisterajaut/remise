@@ -1,6 +1,6 @@
 # remise.
 
-**Remise is a free toolbox for your files.** Compress a PDF, turn a video into a GIF, convert a Word document, remove a photo's location data, make a QR code — 98 small tools in one desktop app.
+**Remise is a free toolbox for your files.** Compress a PDF, turn a video into a GIF, convert a Word document, remove a photo's location data, make a QR code — 99 small tools in one desktop app.
 
 Everything happens **on your computer**. Nothing is uploaded, there's no account, and it works offline. Your original files are never changed: every result is saved as a new file next to the original.
 
@@ -96,7 +96,7 @@ It is the same program as the app, so on Linux it still needs the libraries the 
 ## What's inside
 
 <details>
-<summary><b>All 98 tools</b> (click to open)</summary>
+<summary><b>All 99 tools</b> (click to open)</summary>
 
 | Family | Tools |
 |---|---|
@@ -104,7 +104,7 @@ It is the same program as the app, so on Linux it still needs the libraries the 
 | **Docs** (6) | Convert document (Word, OpenDocument, PDF, web page, EPUB, RTF, text), To Markdown, Markdown to PDF, Markdown to Word, Markdown to slides, PDF to Ebook |
 | **Image** (21) | Convert, Compress, Resize, Crop, Rotate & flip, Auto-crop borders, Strip metadata, Extract text, Redact (black box or pixelate), SEO image, Compare, Logo on each, Remove background, Vectorize, Stylize, Watermark, Upscale, AI Upscale, Icon pack, Color palette, Contact sheet |
 | **Video** (19) | Compress, Convert, Video to GIF, Trim, Split, Crop, Resize, Rotate, Change speed, Mute, Extract audio, Add audio, Join, Insert clip, Watermark, Caption (burn in subtitles), Transcribe, Extract frames, Video downloader |
-| **Audio** (9) | Convert, Compress, Trim, Split, Merge, Volume & normalize, Speed, Waveform image, Audiogram |
+| **Audio** (10) | Convert, Compress, Trim, Split, Merge, Volume & normalize, Speed, Waveform image, Audiogram, Clean up recording (cuts pauses, reduces hiss) |
 | **Create** (8) | Device mockup, Beautify shot, HTML to image, Gradient, Shader backdrop, Font specimen, Carousel, QR code |
 | **Files** (7) | Create archive (optionally password-protected), Extract archive, Batch rename, Change file dates, Sort & route, Checksum (SHA-256), Find duplicates |
 

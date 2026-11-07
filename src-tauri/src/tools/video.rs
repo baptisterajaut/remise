@@ -585,11 +585,16 @@ fn encode(j: &Job, inputs: Vec<String>, fc: String) -> Vec<String> {
     let mut a = args!["-hide_banner", "-nostdin", "-y"];
     a.extend(inputs);
     a.extend(args!["-filter_complex", fc, "-map", "[v]", "-map", "[a]"]);
-    if ext_of(&j.out) == "webm" {
-        a.extend(args!["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus"]);
-    } else {
-        a.extend(args!["-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac"]);
-    }
+    a.extend(codecs(j));
     a.push(j.out());
     a
+}
+
+/// VP9/Opus into WebM, H.264/AAC into anything else.
+pub fn codecs(j: &Job) -> Vec<String> {
+    if ext_of(&j.out) == "webm" {
+        args!["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus"]
+    } else {
+        args!["-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac"]
+    }
 }

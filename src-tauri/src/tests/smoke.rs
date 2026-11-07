@@ -403,6 +403,25 @@ fn smoke_mixed_clips_join_and_insert() {
     let _ = fs::remove_dir_all(&fx.dir);
 }
 
+/// A pause in the middle of a talking clip comes out, picture and sound alike, minus the margins.
+#[test]
+#[ignore]
+fn smoke_clean_up_cuts_the_pause() {
+    let fx = fixtures("cleanup");
+    let talk = fx.dir.join("talk.mp4");
+    let sound = "aevalsrc='if(between(t,1,2.5),0,0.5*sin(2*PI*440*t))':s=48000:d=3.5";
+    let (picture, path) = ("testsrc=s=320x240:d=3.5:r=25", tools::s(&talk));
+    sh("ffmpeg", &["-y", "-f", "lavfi", "-i", picture, "-f", "lavfi", "-i", sound, "-pix_fmt", "yuv420p", "-shortest", &path]);
+    let out = go("aud-cleanup", &[&talk], &[], &fx.dir).unwrap();
+    let (ffmpeg, _) = resolve("ffmpeg", &[]).unwrap();
+    let info = command(&ffmpeg).args(["-hide_banner", "-i", &out[0]]).output().unwrap().stderr;
+    let m = tools::media::parse(&String::from_utf8_lossy(&info));
+    let d = m.duration.unwrap_or_default();
+    assert!(m.video.is_some() && m.audio.is_some(), "{m:?}");
+    assert!((2.1..2.4).contains(&d), "1.5 s pause minus 2 × 0.12 s margin should leave about 2.24 s, got {d}");
+    let _ = fs::remove_dir_all(&fx.dir);
+}
+
 /// Stop kills the program mid-way and leaves nothing next to the input.
 #[test]
 #[ignore]

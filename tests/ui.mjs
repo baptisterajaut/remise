@@ -227,6 +227,7 @@ const NEW_TOOLS = [
   { card: /PDF\/A/, option: "PDF/A-1b", drop: ["/d/a.pdf"], params: { level: "1" } },
   { card: /Checksum/, option: "Check", drop: ["/d/disk.iso"], params: { mode: "check" } },
   { card: /Find duplicates/, drop: ["/d/a.jpg", "/d/b.jpg"], params: {} },
+  { card: /Clean up recording/, option: "Over 1 s", drop: ["/d/talk.mp4"], params: { pauses: "1", level: "-35", denoise: "on" } },
 ];
 async function newToolsFlow(page) {
   for (const t of NEW_TOOLS) {

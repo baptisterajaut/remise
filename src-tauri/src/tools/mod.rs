@@ -217,7 +217,7 @@ const TRIM: &[Param] = &[
     Param::Text { key: "end", label: "End", default: "00:00:10", placeholder: "hh:mm:ss" },
 ];
 
-mod audio;
+pub mod audio;
 pub mod create;
 pub mod docs;
 pub mod files;
