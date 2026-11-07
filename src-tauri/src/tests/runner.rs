@@ -88,7 +88,7 @@ fn duplicates_move_aside_and_the_oldest_stays() {
     let steps = vec![crate::runner::StepReq { tool: "file-duplicates".into(), params: Default::default() }];
     let mut out = crate::runner::run_chain(&|_| {}, "dups", steps, inputs, &dir).unwrap();
     out.sort();
-    let moved = [dir.join("Duplicates/f.jpg"), dir.join("sub/Duplicates/b.jpg")].map(|p| crate::tools::s(&p));
+    let moved = [dir.join("Duplicates").join("f.jpg"), dir.join("sub").join("Duplicates").join("b.jpg")].map(|p| crate::tools::s(&p));
     assert_eq!(out, moved);
     assert!(z.exists() && c.exists() && e1.exists() && e2.exists() && !b.exists() && !f.exists());
     let _ = fs::remove_dir_all(dir);
