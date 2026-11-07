@@ -99,8 +99,14 @@ jobs:
           $jpg = remise img-convert --format jpg $qr
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $jpg)) { throw "img-convert gave: $jpg" }
           "$qr -> $jpg"
-          remise nope 2>$null
-          if ($LASTEXITCODE -ne 2) { throw "a usage error exited with $LASTEXITCODE" }
+          # A usage error exits 2. With 'Stop' (and native commands under it) that exit code would
+          # end the script, silently once stderr is sent to $null: keep both out of the way.
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          remise nope 2> nope.txt
+          $code = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          if ($code -ne 2) { throw "a usage error exited with ${code}: $(Get-Content nope.txt)" }
           Pop-Location
           # _?= runs the uninstaller in place, so -Wait waits for it.
           Start-Process (Join-Path $root 'uninstall.exe') -ArgumentList '/S', "_?=$root" -Wait
