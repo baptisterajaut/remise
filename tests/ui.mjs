@@ -223,7 +223,10 @@ async function archiveFlow(page) {
 }
 
 /** Newer tools: the card opens, an option sticks, and the run carries it. */
-const NEW_TOOLS = [{ card: /PDF\/A/, option: "PDF/A-1b", drop: ["/d/a.pdf"], params: { level: "1" } }];
+const NEW_TOOLS = [
+  { card: /PDF\/A/, option: "PDF/A-1b", drop: ["/d/a.pdf"], params: { level: "1" } },
+  { card: /Checksum/, option: "Check", drop: ["/d/disk.iso"], params: { mode: "check" } },
+];
 async function newToolsFlow(page) {
   for (const t of NEW_TOOLS) {
     await resetWall(page);

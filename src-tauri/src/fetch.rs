@@ -275,7 +275,7 @@ fn download(emit: Emit, d: &Download, part: &Path) -> Result<(), String> {
     }
 }
 
-fn sha256(path: &Path) -> io::Result<String> {
+pub(crate) fn sha256(path: &Path) -> io::Result<String> {
     let mut hasher = Sha256::new();
     io::copy(&mut fs::File::open(path)?, &mut hasher)?;
     Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())

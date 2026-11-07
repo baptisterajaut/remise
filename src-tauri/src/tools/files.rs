@@ -124,7 +124,78 @@ pub static TOOLS: &[Tool] = &[
         output: Output::None,
         build: |_| vec![Step::Then(sort_plan)],
     },
+    Tool {
+        id: "file-checksum",
+        family: Family::Files,
+        name: "Checksum",
+        blurb: "SHA-256: write a .sha256 next to each file, or check one.",
+        bins: &[],
+        accepts: &[],
+        inputs: Inputs::One,
+        params: &[Param::Select { key: "mode", label: "Mode", options: &[("make", "Write .sha256"), ("check", "Check")], default: "make" }],
+        output: Output::None,
+        build: |j| vec![Step::Then(if j.p("mode") == "check" { check_sum } else { write_sum })],
+    },
 ];
+
+/// `sha256sum`'s format, so the file checks with it too. Written aside, then moved next to the
+/// file: an existing .sha256 is never overwritten.
+fn write_sum(j: &Job) -> Result<Vec<Step>, String> {
+    let file = &j.inputs[0];
+    if ext_of(file) == "sha256" {
+        return Err("this is already a checksum: use Check".into());
+    }
+    let hash = crate::fetch::sha256(file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let name = file.file_name().ok_or("odd file name")?.to_string_lossy();
+    let aside = j.tmp.join("sum");
+    Ok(vec![Step::Write(aside.clone(), format!("{hash}  {name}\n")), Step::Rename(aside, sum_of(file))])
+}
+
+/// A dropped file is checked against the .sha256 next to it; a dropped .sha256, every file it
+/// lists. Success leaves nothing behind; a mismatch fails, naming the files.
+fn check_sum(j: &Job) -> Result<Vec<Step>, String> {
+    let dropped = &j.inputs[0];
+    let (list, only) = if ext_of(dropped) == "sha256" { (dropped.clone(), None) } else { (sum_of(dropped), Some(dropped)) };
+    let text = std::fs::read_to_string(&list).map_err(|_| format!("no {} next to it", list.display()))?;
+    let entries = parse_sums(&list, &text)?;
+    // Lists name files as they were typed (`./a.txt`): compared as real paths.
+    let real = |p: &PathBuf| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone());
+    let wanted: Vec<_> = entries.iter().filter(|(_, f)| only.is_none_or(|o| real(o) == real(f))).collect();
+    if wanted.is_empty() {
+        return Err(format!("{} doesn't list this file", list.display()));
+    }
+    let bad: Vec<String> = wanted
+        .into_iter()
+        .filter(|(hash, f)| !crate::fetch::sha256(f).is_ok_and(|h| h.eq_ignore_ascii_case(hash)))
+        .map(|(_, f)| f.file_name().unwrap_or_default().to_string_lossy().into_owned())
+        .collect();
+    if bad.is_empty() { Ok(vec![]) } else { Err(format!("doesn't match (changed, damaged or missing): {}", bad.join(", "))) }
+}
+
+fn sum_of(file: &std::path::Path) -> PathBuf {
+    let mut name = file.as_os_str().to_owned();
+    name.push(".sha256");
+    PathBuf::from(name)
+}
+
+/// `HASH  name` (or ` *name`, binary mode) per line, as `sha256sum` writes; a bare hash, as many
+/// download pages publish, is the file the list is named after.
+pub fn parse_sums(list: &std::path::Path, text: &str) -> Result<Vec<(String, PathBuf)>, String> {
+    let dir = list.parent().unwrap_or(std::path::Path::new(""));
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|line| {
+            let (hash, name) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+            if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err(format!("{} isn't a SHA-256 list", list.display()));
+            }
+            let name = name.trim_start().trim_start_matches('*');
+            let file = if name.is_empty() { list.with_extension("") } else { dir.join(name) };
+            Ok((hash.to_string(), file))
+        })
+        .collect()
+}
 
 /// 7-Zip with the password on stdin, never argv, which anyone can read in `ps`. Always answered,
 /// empty if need be: with nothing on stdin a locked archive gets "Break signaled" instead of
