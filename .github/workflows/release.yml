@@ -72,7 +72,49 @@ jobs:
           releaseBody: Local file tools. Pick the installer for your system; bundled third-party tools are listed in THIRD_PARTY.md inside the app.
           releaseDraft: true
           uploadWorkflowArtifacts: true
-          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --config src-tauri/tauri.vendor.conf.json
+          # Windows also ships remise-cli.exe, the console front of the command line.
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --config src-tauri/tauri.vendor.conf.json ${{ runner.os == 'Windows' && '--features cli-wrapper' || '' }}
+      # The command line as installed, end to end: remise-cli.exe in front of the release
+      # Remise.exe (a GUI program: this is what the wrapper is for), bundled tools found through
+      # the installed resources, and the PATH entry added (/PATH) then removed by the uninstaller.
+      - name: Command line from the installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)[0].FullName
+          Start-Process $setup -ArgumentList '/S', '/PATH' -Wait
+          $dir = Join-Path $env:LOCALAPPDATA 'Remise'
+          $cli = Join-Path $dir 'remise-cli.exe'
+          $onPath = { ((Get-ItemProperty HKCU:\Environment).Path -split ';') -contains $dir }
+          if (-not (& $onPath)) { throw "$dir is not on the user PATH" }
+          if (-not ((& $cli list) -match '^  pdf-compress ')) { throw 'remise-cli list printed no pdf-compress' }
+          Push-Location (New-Item -ItemType Directory (Join-Path $env:RUNNER_TEMP 'cli'))
+          $qr = & $cli create-qr --text hello --format png
+          $jpg = & $cli img-convert --format jpg $qr
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $jpg)) { throw "img-convert gave: $jpg" }
+          "$qr -> $jpg"
+          & $cli nope 2>$null
+          if ($LASTEXITCODE -ne 2) { throw "a usage error exited with $LASTEXITCODE" }
+          Pop-Location
+          # _?= runs the uninstaller in place, so -Wait waits for it.
+          Start-Process (Join-Path $dir 'uninstall.exe') -ArgumentList '/S', "_?=$dir" -Wait
+          if (& $onPath) { throw "$dir is still on the user PATH" }
+      - name: Command line from the AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          # No FUSE needed: the runtime unpacks to a temp dir and runs from there.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          set -euo pipefail
+          app=$(echo "$PWD"/src-tauri/target/release/bundle/appimage/*.AppImage)
+          cd "$(mktemp -d)"
+          "$app" list | grep -q '^  pdf-compress '
+          qr=$("$app" create-qr --text hello --format png)
+          jpg=$("$app" img-convert --format jpg "$qr")
+          echo "$qr -> $jpg"
+          test -s "$jpg"
       # Tauri writes zlib disk images; lzma (ULMO, macOS 10.15+, and Remise needs 11) makes them
       # ~40 MB smaller. Converted after the fact, then put in place of the uploaded one.
       - name: Recompress the disk image
@@ -90,6 +132,19 @@ jobs:
             mnt=$(mktemp -d)
             hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
             ls "$mnt"/*.app/Contents/MacOS/
+            # The command line from the shipped app, its tools found inside the .app. The Intel
+            # build runs on this arm64 runner only through Rosetta.
+            if [ "${{ matrix.target }}" = aarch64-apple-darwin ] || arch -x86_64 /usr/bin/true 2>/dev/null; then
+              app=$(echo "$mnt"/*.app)/Contents/MacOS/remise
+              work=$(mktemp -d)
+              "$app" list | grep -q '^  pdf-compress '
+              qr=$(cd "$work" && "$app" create-qr --text hello --format png)
+              jpg=$("$app" img-convert --format jpg "$qr")
+              echo "$qr -> $jpg"
+              test -s "$jpg"
+            else
+              echo "no Rosetta here: the Intel command line isn't run"
+            fi
             hdiutil detach "$mnt"
             ls -l "$dmg"
             if [ -n "$TAG" ]; then gh release upload "$TAG" "$dmg" --clobber; fi

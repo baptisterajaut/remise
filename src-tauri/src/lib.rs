@@ -1,6 +1,7 @@
 #![warn(clippy::cognitive_complexity, clippy::too_many_lines)]
 
 mod bins;
+mod cli;
 mod cutout;
 mod fetch;
 mod runner;
@@ -139,8 +140,16 @@ async fn download(app: AppHandle, bin: String) -> Result<(), String> {
     .map_err(|e| e.to_string())?
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run_app() {
+/// The app, or the command line when there are arguments that aren't files to open.
+pub fn start(args: &[String]) {
+    let context = tauri::generate_context!();
+    if cli::wanted(args) {
+        std::process::exit(cli::main(args, context.package_info(), &context.config().identifier));
+    }
+    run_app(context)
+}
+
+fn run_app(context: tauri::Context) {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -150,6 +159,6 @@ pub fn run_app() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![list_tools, run, stop, preview, downloads, download])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }

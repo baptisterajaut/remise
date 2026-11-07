@@ -3,6 +3,7 @@
 //!   cargo test -- --ignored smoke       every tool against the real binaries
 
 mod bins;
+mod cli;
 mod cutout;
 mod fetch;
 mod helpers;

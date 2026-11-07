@@ -24,8 +24,15 @@ pub fn stop(job: &str) {
     STOPPED.lock().unwrap_or_else(|e| e.into_inner()).push(job.to_string());
 }
 
+/// Ctrl+C in a terminal: every job stops. An atomic, so a signal handler may set it.
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+pub fn interrupt() {
+    INTERRUPTED.store(true, Ordering::Relaxed);
+}
+
 fn stopped(job: &str) -> bool {
-    STOPPED.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|j| j == job)
+    INTERRUPTED.load(Ordering::Relaxed) || STOPPED.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|j| j == job)
 }
 
 fn forget_stop(job: &str) {

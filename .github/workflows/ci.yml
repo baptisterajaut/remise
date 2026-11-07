@@ -92,8 +92,9 @@ jobs:
         with:
           path: ${{ runner.temp }}/user-tools
           key: user-tools-${{ matrix.vendor }}-${{ hashFiles('src-tauri/src/fetch.rs') }}
-      # The app itself: background removal runs it as a helper (`remise --cutout`).
-      - run: cargo build --manifest-path src-tauri/Cargo.toml
+      # The app itself: background removal runs it as a helper (`remise --cutout`). Windows also
+      # gets remise-cli.exe, its command line front.
+      - run: cargo build --manifest-path src-tauri/Cargo.toml ${{ runner.os == 'Windows' && '--features cli-wrapper' || '' }}
       - run: cargo test --manifest-path src-tauri/Cargo.toml -- --ignored smoke --nocapture
         env:
           REMISE_VENDOR: ${{ github.workspace }}/vendor
@@ -105,3 +106,21 @@ jobs:
           REMISE_SMOKE_SKIP: ${{ runner.os == 'Windows' && 'img-ai-upscale' || '' }}
           # PDF/A output checked by veraPDF 1.30.3 (Docker, so Linux only).
           REMISE_VERAPDF: ${{ runner.os == 'Linux' && 'verapdf/cli@sha256:d74b7026c18a0f171e73c153b617fe6520e1511feb24ca98a348b2bb897669fb' || '' }}
+      # The command line as each system ships it: remise-cli.exe on Windows, the app binary
+      # elsewhere. A generator, then a bundled tool on its result, then a usage error.
+      - name: Command line
+        shell: bash
+        env:
+          REMISE_VENDOR: ${{ github.workspace }}/vendor
+          CLI: ${{ github.workspace }}/src-tauri/target/debug/${{ runner.os == 'Windows' && 'remise-cli.exe' || 'remise' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cli" && cd "$RUNNER_TEMP/cli"
+          "$CLI" list | grep -q '^  pdf-compress '
+          "$CLI" help pdf-pdfa | grep -q -- '--level'
+          qr=$("$CLI" create-qr --text hello --format png)
+          jpg=$("$CLI" img-convert --format jpg "$qr")
+          echo "$qr -> $jpg"
+          test -s "$jpg"
+          if "$CLI" nope 2> err.txt; then exit 1; else code=$?; fi
+          test "$code" -eq 2 && grep -q 'no tool or file named "nope"' err.txt

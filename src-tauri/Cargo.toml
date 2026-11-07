@@ -26,6 +26,8 @@ serde_json = "1"
 tauri-plugin-dialog = "2.8.4"
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 sha2 = "0.10"
+# Where Tauri keeps per-user data, for the command line (which runs without a Tauri app).
+dirs = "7"
 # Background removal. ONNX Runtime itself is bundled as a library and loaded only by
 # `remise --cutout`, a child process, so the app never links it.
 ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic"] }
@@ -33,6 +35,22 @@ ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "
 [target.'cfg(windows)'.dependencies]
 # Already pulled in by ort; used to pin ONNX Runtime's C++ runtime to the bundled copies.
 libloading = "0.9"
+# Already pulled in by Tauri; remise-cli.exe ties Remise.exe's life to its own (job object).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+[target.'cfg(unix)'.dependencies]
+# Already pulled in; the command line's Ctrl+C handler.
+libc = "0.2"
+
+[features]
+# remise-cli.exe, the console front Windows needs (Remise.exe is a GUI program, whose output a
+# terminal never sees). Only the Windows build turns it on, so only its installer carries it.
+cli-wrapper = []
+
+[[bin]]
+name = "remise-cli"
+path = "src/bin/remise-cli.rs"
+required-features = ["cli-wrapper"]
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
