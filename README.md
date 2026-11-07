@@ -1,6 +1,6 @@
 # remise.
 
-**Remise is a free toolbox for your files.** Compress a PDF, turn a video into a GIF, convert a Word document, remove a photo's location data, make a QR code — 95 small tools in one desktop app.
+**Remise is a free toolbox for your files.** Compress a PDF, turn a video into a GIF, convert a Word document, remove a photo's location data, make a QR code — 98 small tools in one desktop app.
 
 Everything happens **on your computer**. Nothing is uploaded, there's no account, and it works offline. Your original files are never changed: every result is saved as a new file next to the original.
 
@@ -75,17 +75,17 @@ A few more things to know:
 ## What's inside
 
 <details>
-<summary><b>All 95 tools</b> (click to open)</summary>
+<summary><b>All 98 tools</b> (click to open)</summary>
 
 | Family | Tools |
 |---|---|
-| **PDF** (27) | Compress, Merge, Split, Extract pages, Organize pages, Rotate pages, OCR (scans → searchable PDF), PDF to images, Images to PDF, Extract text, PDF to Markdown, Grayscale, Encrypt, Unlock, Optimize for web, Redact, Sign, Crop margins, Page numbers, Stamp, Attach to each (a cover or terms page on every PDF), Flatten, Repair, Office to PDF, Ebook (EPUB) to PDF, HTML to PDF, PDF Studio |
+| **PDF** (28) | Compress, Merge, Split, Extract pages, Organize pages, Rotate pages, OCR (scans → searchable PDF), PDF to images, Images to PDF, Extract text, PDF to Markdown, Grayscale, Encrypt, Unlock, Optimize for web, PDF/A (archival), Redact, Sign, Crop margins, Page numbers, Stamp, Attach to each (a cover or terms page on every PDF), Flatten, Repair, Office to PDF, Ebook (EPUB) to PDF, HTML to PDF, PDF Studio |
 | **Docs** (6) | Convert document (Word, OpenDocument, PDF, web page, EPUB, RTF, text), To Markdown, Markdown to PDF, Markdown to Word, Markdown to slides, PDF to Ebook |
 | **Image** (21) | Convert, Compress, Resize, Crop, Rotate & flip, Auto-crop borders, Strip metadata, Extract text, Redact (black box or pixelate), SEO image, Compare, Logo on each, Remove background, Vectorize, Stylize, Watermark, Upscale, AI Upscale, Icon pack, Color palette, Contact sheet |
 | **Video** (19) | Compress, Convert, Video to GIF, Trim, Split, Crop, Resize, Rotate, Change speed, Mute, Extract audio, Add audio, Join, Insert clip, Watermark, Caption (burn in subtitles), Transcribe, Extract frames, Video downloader |
 | **Audio** (9) | Convert, Compress, Trim, Split, Merge, Volume & normalize, Speed, Waveform image, Audiogram |
 | **Create** (8) | Device mockup, Beautify shot, HTML to image, Gradient, Shader backdrop, Font specimen, Carousel, QR code |
-| **Files** (5) | Create archive, Extract archive, Batch rename, Change file dates, Sort & route |
+| **Files** (7) | Create archive (optionally password-protected), Extract archive, Batch rename, Change file dates, Sort & route, Checksum (SHA-256), Find duplicates |
 
 </details>
 

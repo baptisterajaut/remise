@@ -10,7 +10,7 @@ To replay the check against their live page:
 REMISE_MANIFEST=$PWD/src-tauri/target/manifest.json cargo test --manifest-path src-tauri/Cargo.toml -- --ignored manifest
 python3 scripts/coverage.py src-tauri/target/manifest.json
 # hangar.tools: 77 shipped, 12 marked soon
-# remise: 95 tools, covers 77/77 shipped
+# remise: 98 tools, covers 77/77 shipped
 ```
 
 The mapping from their tool ids to ours lives in `scripts/coverage.py`. In a few places the two differ in depth:
