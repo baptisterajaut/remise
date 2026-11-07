@@ -67,3 +67,29 @@ fn reads_checksum_lists() {
     assert_eq!(parse_sums(list, h).unwrap()[0].1, std::path::Path::new("/d/app.zip"));
     assert!(parse_sums(list, "not a hash  a.txt").is_err());
 }
+
+#[test]
+fn duplicates_move_aside_and_the_oldest_stays() {
+    let dir = std::env::temp_dir().join(format!("remise-dups-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("sub")).unwrap();
+    let day = std::time::Duration::from_secs(86_400);
+    let now = std::time::SystemTime::now();
+    let put = |name: &str, body: &str, age: u32| {
+        let p = dir.join(name);
+        fs::write(&p, body).unwrap();
+        fs::File::options().write(true).open(&p).unwrap().set_modified(now - day * age).unwrap();
+        p
+    };
+    // The original is the oldest, whatever its name or folder.
+    let (z, b, f, c) = (put("z.jpg", "same", 9), put("sub/b.jpg", "same", 1), put("f.jpg", "same", 2), put("c.jpg", "other", 5));
+    let (e1, e2) = (put("e1.txt", "", 1), put("e2.txt", "", 1));
+    let inputs = [&z, &b, &f, &c, &e1, &e2, &z].map(|p| crate::tools::s(p)).to_vec();
+    let steps = vec![crate::runner::StepReq { tool: "file-duplicates".into(), params: Default::default() }];
+    let mut out = crate::runner::run_chain(&|_| {}, "dups", steps, inputs, &dir).unwrap();
+    out.sort();
+    let moved = [dir.join("Duplicates/f.jpg"), dir.join("sub/Duplicates/b.jpg")].map(|p| crate::tools::s(&p));
+    assert_eq!(out, moved);
+    assert!(z.exists() && c.exists() && e1.exists() && e2.exists() && !b.exists() && !f.exists());
+    let _ = fs::remove_dir_all(dir);
+}

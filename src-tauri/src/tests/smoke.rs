@@ -191,6 +191,7 @@ const NOT_IN_LOOP: &[&str] = &[
     "batch-rename",
     "file-sort",
     "file-dates",
+    "file-duplicates",
     "pdf-unlock",
     "arc-extract",
 ];

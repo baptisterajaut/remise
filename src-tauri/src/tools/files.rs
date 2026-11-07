@@ -136,7 +136,52 @@ pub static TOOLS: &[Tool] = &[
         output: Output::None,
         build: |j| vec![Step::Then(if j.p("mode") == "check" { check_sum } else { write_sum })],
     },
+    Tool {
+        id: "file-duplicates",
+        family: Family::Files,
+        name: "Find duplicates",
+        blurb: "Same content, any name: the copies go to a Duplicates folder. Nothing is deleted.",
+        bins: &[],
+        accepts: &[],
+        inputs: Inputs::Many,
+        params: &[],
+        output: Output::None,
+        build: |_| vec![Step::Then(duplicates_plan)],
+    },
 ];
+
+/// Files of the same size are hashed, and of each identical set the oldest (modified first)
+/// stays put; the others move to `Duplicates/` beside them. Empty files aren't duplicates of
+/// anything worth moving.
+fn duplicates_plan(j: &Job) -> Result<Vec<Step>, String> {
+    use std::collections::BTreeMap;
+    // The same file dropped twice, or through two paths, is one file. Keyed by its real path,
+    // moved under the one it was dropped as (Windows' real paths read \\?\C:\…).
+    let files: BTreeMap<PathBuf, &PathBuf> =
+        j.inputs.iter().filter(|p| p.is_file()).filter_map(|p| std::fs::canonicalize(p).ok().map(|real| (real, p))).collect();
+    let mut by_size: BTreeMap<u64, Vec<&PathBuf>> = BTreeMap::new();
+    for f in files.into_values() {
+        let len = std::fs::metadata(f).map_err(|e| format!("{}: {e}", f.display()))?.len();
+        if len > 0 {
+            by_size.entry(len).or_default().push(f);
+        }
+    }
+    let mut moves = vec![];
+    for same_size in by_size.into_values().filter(|g| g.len() > 1) {
+        let mut by_hash: BTreeMap<String, Vec<&PathBuf>> = BTreeMap::new();
+        for f in same_size {
+            by_hash.entry(crate::fetch::sha256(f).map_err(|e| format!("{}: {e}", f.display()))?).or_default().push(f);
+        }
+        for mut same in by_hash.into_values().filter(|g| g.len() > 1) {
+            same.sort_by_key(|f| (std::fs::metadata(f).and_then(|m| m.modified()).ok(), f.to_path_buf()));
+            for copy in &same[1..] {
+                let name = copy.file_name().ok_or("odd file name")?;
+                moves.push(Step::Rename(copy.to_path_buf(), copy.with_file_name("Duplicates").join(name)));
+            }
+        }
+    }
+    Ok(all_or_nothing(moves))
+}
 
 /// `sha256sum`'s format, so the file checks with it too. Written aside, then moved next to the
 /// file: an existing .sha256 is never overwritten.

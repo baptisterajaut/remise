@@ -226,12 +226,13 @@ async function archiveFlow(page) {
 const NEW_TOOLS = [
   { card: /PDF\/A/, option: "PDF/A-1b", drop: ["/d/a.pdf"], params: { level: "1" } },
   { card: /Checksum/, option: "Check", drop: ["/d/disk.iso"], params: { mode: "check" } },
+  { card: /Find duplicates/, drop: ["/d/a.jpg", "/d/b.jpg"], params: {} },
 ];
 async function newToolsFlow(page) {
   for (const t of NEW_TOOLS) {
     await resetWall(page);
     await page.getByRole("button", { name: t.card }).click();
-    await page.getByRole("button", { name: t.option, exact: true }).click();
+    if (t.option) await page.getByRole("button", { name: t.option, exact: true }).click();
     await page.evaluate((paths) => window.__drop(paths), t.drop);
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await page.waitForSelector(".files li.done");
