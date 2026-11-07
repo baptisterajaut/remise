@@ -77,6 +77,8 @@ pub enum Step {
     Run(&'static str, Vec<String>),
     /// Same, from inside `dir` (tools that write relative paths, like Pandoc's extracted media).
     RunIn(PathBuf, &'static str, Vec<String>),
+    /// Same, with text on stdin: how a password reaches 7-Zip without showing in `ps`.
+    Feed(&'static str, Vec<String>, String),
     Write(PathBuf, String),
     Rename(PathBuf, PathBuf),
     /// Start another app and don't wait for it.

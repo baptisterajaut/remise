@@ -270,6 +270,23 @@ fn smoke_every_tool() {
     }
 }
 
+/// The password reaches 7-Zip on stdin: a wrong one is refused, the right one opens it.
+#[test]
+#[ignore]
+fn smoke_locked_archives() {
+    let fx = fixtures("locked");
+    // Zip passwords are ASCII only; 7z takes any, and Windows has to hand it over as UTF-8.
+    for (format, pw) in [("zip", "pw d'ete"), ("7z", "pw d'été")] {
+        let locked = go("arc-create", &[&fx.png, &fx.pdf], &[("format", format), ("password", pw)], &fx.dir).unwrap();
+        let locked = Path::new(&locked[0]);
+        let wrong = go("arc-extract", &[locked], &[("password", "nope")], &fx.dir);
+        assert!(wrong.as_ref().is_err_and(|e| e.contains("password")), "{format}: {wrong:?}");
+        let out = go("arc-extract", &[locked], &[("password", pw)], &fx.dir).unwrap();
+        assert!(Path::new(&out[0]).join("doc.pdf").exists(), "{format}: {out:?}");
+    }
+    let _ = fs::remove_dir_all(&fx.dir);
+}
+
 #[test]
 #[ignore]
 fn smoke_chain_lands_one_file_next_to_input() {

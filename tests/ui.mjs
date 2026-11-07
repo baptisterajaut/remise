@@ -208,6 +208,20 @@ async function datesFlow(page) {
   assert.equal(params.tz, "60", "a January date in Paris is UTC+1");
 }
 
+/** A tool's own password is sent with the run and never saved with its other settings. */
+async function archiveFlow(page) {
+  await resetWall(page);
+  await page.getByRole("button", { name: /Create archive/ }).click();
+  await page.getByRole("button", { name: "7z", exact: true }).click();
+  await page.fill("#params input[type=password]", "s3cret");
+  await page.evaluate(() => window.__drop(["/d/a.txt", "/d/b.txt"]));
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.waitForSelector(".files li.done");
+  assert.deepEqual(await page.evaluate(() => window.__runs.at(-1).steps[0].params), { format: "7z", password: "s3cret" });
+  const saved = await page.evaluate(() => localStorage.getItem("remise.params.arc-create"));
+  assert.ok(saved.includes("7z") && !saved.includes("s3cret"), saved);
+}
+
 async function stopFlow(page) {
   await resetWall(page);
   await page.getByRole("button", { name: /Compress video/ }).click();
@@ -374,6 +388,7 @@ for (const scheme of ["light", "dark"]) {
   await generatorFlow(page, shot);
   await previewFlow(page);
   await datesFlow(page);
+  await archiveFlow(page);
   await stopFlow(page);
   await downloadFlow(page, shot);
   await busyFlow(page);

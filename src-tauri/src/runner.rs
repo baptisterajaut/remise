@@ -7,7 +7,7 @@ use crate::tools::{self, Inputs, Job, Output, Step, Tool, find, stem_of, with_de
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ChildStderr, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -144,7 +144,7 @@ fn expand(arg: &str, bindir: &str) -> String {
 }
 
 /// Runs one binary to completion. ffmpeg gets a real progress percentage.
-fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>) -> Result<(), String> {
+fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>, input: Option<&str>) -> Result<(), String> {
     let (path, args) = resolve(bin, args).ok_or_else(|| format!("{bin} is not installed"))?;
     let bindir = path.parent().map(tools::s).unwrap_or_default();
     let args: Vec<String> = args.iter().map(|a| expand(a, &bindir)).collect();
@@ -158,8 +158,14 @@ fn exec(emit: Emit, p: &Progress, bin: &str, args: &[String], cwd: Option<&Path>
     // Its own process group, so Stop also reaches what it starts (soffice.bin, yt-dlp's ffmpeg).
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let stdin = if input.is_some() { Stdio::piped() } else { Stdio::null() };
     let mut child =
-        cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("{bin}: {e}"))?;
+        cmd.args(&args).stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("{bin}: {e}"))?;
+    // A line or two, well under a pipe's buffer: written whole, then closed so the program sees
+    // the end. A program that never reads it (no prompt came up) is fine.
+    if let (Some(text), Some(mut pipe)) = (input, child.stdin.take()) {
+        let _ = pipe.write_all(text.as_bytes());
+    }
     // Stdout is read on this thread (the progress callback isn't Send), so Stop is watched on
     // another one, which only needs the pid to kill the program and what it started.
     let done = Arc::new(AtomicBool::new(false));
@@ -230,8 +236,9 @@ fn rename(from: &Path, to: &Path) -> Result<(), String> {
 
 fn run_step(emit: Emit, p: &Progress, job: &Job, step: Step, produced: &mut Vec<PathBuf>) -> Result<(), String> {
     match step {
-        Step::Run(bin, args) => exec(emit, p, bin, &args, None),
-        Step::RunIn(dir, bin, args) => exec(emit, p, bin, &args, Some(&dir)),
+        Step::Run(bin, args) => exec(emit, p, bin, &args, None, None),
+        Step::RunIn(dir, bin, args) => exec(emit, p, bin, &args, Some(&dir), None),
+        Step::Feed(bin, args, input) => exec(emit, p, bin, &args, None, Some(&input)),
         Step::Capture { bin, args, into } => capture(bin, &args, &into),
         Step::Probe(input, into) => probe(&input, &into),
         Step::Then(next) => next(job)?.into_iter().try_for_each(|s| run_step(emit, p, job, s, produced)),

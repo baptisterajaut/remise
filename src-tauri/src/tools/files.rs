@@ -11,12 +11,25 @@ pub static TOOLS: &[Tool] = &[
         bins: &["7z"],
         accepts: &[],
         inputs: Inputs::Many,
-        params: &[Param::Select { key: "format", label: "Format", options: &[("zip", "ZIP"), ("7z", "7z")], default: "zip" }],
+        params: &[
+            Param::Select { key: "format", label: "Format", options: &[("zip", "ZIP"), ("7z", "7z")], default: "zip" },
+            Param::Text { key: "password", label: "Password", default: "", placeholder: "none" },
+        ],
         output: Output::File { suffix: "archive", ext: fmt },
+        // AES-256 either way. 7z also hides the file names; a zip shows them to anyone.
         build: |j| {
-            let mut a = args!["a", format!("-t{}", j.p("format")), "-y", j.out()];
+            if j.p("format") == "zip" && !j.p("password").is_ascii() {
+                // 7-Zip's answer is E_INVALIDARG: zip never said how to encode the rest.
+                return vec![Step::Fail("a zip password takes no accents or symbols beyond ASCII; 7z takes any".into())];
+            }
+            let mut a = args!["a", format!("-t{}", j.p("format")), "-y"];
+            if !j.p("password").is_empty() {
+                // `-p` alone: 7-Zip asks for it.
+                a.extend(args!["-p", if j.p("format") == "7z" { "-mhe=on" } else { "-mem=AES256" }]);
+            }
+            a.push(j.out());
             a.extend(j.inputs.iter().map(|p| s(p)));
-            vec![Step::Run("7z", a)]
+            seven_zip(a, j.p("password"))
         },
     },
     Tool {
@@ -27,9 +40,10 @@ pub static TOOLS: &[Tool] = &[
         bins: &["7z"],
         accepts: ARCHIVES,
         inputs: Inputs::One,
-        params: &[],
+        params: &[Param::Text { key: "password", label: "Password", default: "", placeholder: "if it has one" }],
         output: Output::Dir("extracted"),
-        build: |j| vec![Step::Run("7z", args!["x", "-y", format!("-o{}", j.out()), j.input()])],
+        // 7-Zip only asks when the archive is locked.
+        build: |j| seven_zip(args!["x", "-y", format!("-o{}", j.out()), j.input()], j.p("password")),
     },
     Tool {
         id: "batch-rename",
@@ -111,6 +125,21 @@ pub static TOOLS: &[Tool] = &[
         build: |_| vec![Step::Then(sort_plan)],
     },
 ];
+
+/// 7-Zip with the password on stdin, never argv, which anyone can read in `ps`. Always answered,
+/// empty if need be: with nothing on stdin a locked archive gets "Break signaled" instead of
+/// "Wrong password".
+fn seven_zip(mut args: Vec<String>, pw: &str) -> Vec<Step> {
+    if pw.contains(['\n', '\r']) {
+        return vec![Step::Fail("a password can't span several lines".into())];
+    }
+    // Windows' 7z reads stdin in the OEM code page, so "été" wouldn't be the password another
+    // tool typed. The Unix build has no such switch (and reads UTF-8).
+    if cfg!(windows) {
+        args.insert(1, "-sccUTF-8".into());
+    }
+    vec![Step::Feed("7z", args, format!("{pw}\n"))]
+}
 
 /// Renames are only started once every target is known to be free and distinct, so a batch never
 /// stops half-way with some files renamed and others not.

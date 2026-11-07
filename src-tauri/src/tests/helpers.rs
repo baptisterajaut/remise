@@ -171,6 +171,27 @@ fn empty_password_is_refused() {
 }
 
 #[test]
+fn archive_password_goes_on_stdin() {
+    for (format, flag) in [("7z", "-mhe=on"), ("zip", "-mem=AES256")] {
+        let steps = job("arc-create", &["/d/a.txt"], &[("format", format), ("password", "s3cret")]);
+        let [Step::Feed("7z", a, input)] = &steps[..] else { panic!("{steps:?}") };
+        assert_eq!(input, "s3cret\n");
+        assert!(a.contains(&"-p".to_string()) && a.contains(&flag.to_string()), "{a:?}");
+        assert!(!a.iter().any(|x| x.contains("s3cret")), "{a:?}");
+    }
+    // No password, no `-p`: a plain archive.
+    let [Step::Feed("7z", a, _)] = &job("arc-create", &["/d/a.txt"], &[])[..] else { panic!() };
+    assert!(!a.iter().any(|x| x.starts_with("-p") || x.starts_with("-m")), "{a:?}");
+    let [Step::Feed("7z", a, input)] = &job("arc-extract", &["/d/a.7z"], &[("password", "s3cret")])[..] else { panic!() };
+    assert!(input == "s3cret\n" && !a.iter().any(|x| x.contains("s3cret")), "{a:?}");
+    for id in ["arc-create", "arc-extract"] {
+        assert!(matches!(&job(id, &["/d/a.7z"], &[("password", "a\nb")])[0], Step::Fail(_)), "{id}");
+    }
+    assert!(matches!(&job("arc-create", &["/d/a.txt"], &[("format", "zip"), ("password", "été")])[0], Step::Fail(_)));
+    assert!(matches!(&job("arc-create", &["/d/a.txt"], &[("format", "7z"), ("password", "été")])[0], Step::Feed(..)));
+}
+
+#[test]
 fn batch_rename_refuses_paths_and_name_clashes() {
     for pattern in ["../x", "a/b", "sub\\x", ""] {
         assert!(matches!(&job("batch-rename", &["/d/a.txt"], &[("pattern", pattern)])[0], Step::Fail(_)), "{pattern}");
