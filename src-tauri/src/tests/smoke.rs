@@ -270,6 +270,33 @@ fn smoke_every_tool() {
     }
 }
 
+/// Every PDF/A level, checked by veraPDF when CI says where it is (`REMISE_VERAPDF`: a docker
+/// image). Without it, only the claim is checked, not the conformance.
+#[test]
+#[ignore]
+fn smoke_pdfa_passes_verapdf() {
+    let fx = fixtures("pdfa");
+    let verapdf = std::env::var("REMISE_VERAPDF").ok().filter(|v| !v.is_empty());
+    for level in ["1", "2", "3"] {
+        let out = go("pdf-pdfa", &[&fx.pdf], &[("level", level)], &fx.dir).unwrap();
+        let out = Path::new(&out[0]);
+        let bytes = fs::read(out).unwrap();
+        let claim = format!("pdfaid:part='{level}'");
+        assert!(bytes.windows(claim.len()).any(|w| w == claim.as_bytes()), "PDF/A-{level}: no {claim}");
+        let Some(image) = &verapdf else { continue };
+        let name = out.file_name().unwrap().to_string_lossy();
+        let report = std::process::Command::new("docker")
+            .args(["run", "--rm", "-v", &format!("{}:/data", fx.dir.display()), image, "--format", "text"])
+            .arg(format!("/data/{name}"))
+            .output()
+            .unwrap();
+        let report = String::from_utf8_lossy(&report.stdout);
+        println!("{}", report.trim());
+        assert!(report.starts_with("PASS"), "PDF/A-{level}:\n{report}");
+    }
+    let _ = fs::remove_dir_all(&fx.dir);
+}
+
 /// The password reaches 7-Zip on stdin: a wrong one is refused, the right one opens it.
 #[test]
 #[ignore]

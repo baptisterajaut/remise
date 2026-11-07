@@ -103,3 +103,5 @@ jobs:
           # waifu2x needs a Vulkan driver; Linux gets Mesa's CPU one (lavapipe) above, the
           # Windows runner has no driver at all.
           REMISE_SMOKE_SKIP: ${{ runner.os == 'Windows' && 'img-ai-upscale' || '' }}
+          # PDF/A output checked by veraPDF 1.30.3 (Docker, so Linux only).
+          REMISE_VERAPDF: ${{ runner.os == 'Linux' && 'verapdf/cli@sha256:d74b7026c18a0f171e73c153b617fe6520e1511feb24ca98a348b2bb897669fb' || '' }}

@@ -293,6 +293,46 @@ pub static TOOLS: &[Tool] = &[
         build: |j| vec![Step::Run("qpdf", args!["--linearize", "--object-streams=generate", j.input(), j.out()])],
     },
     Tool {
+        id: "pdf-pdfa",
+        family: Family::Pdf,
+        name: "PDF/A",
+        blurb: "The archival PDF that courts, tax offices and tenders ask for.",
+        bins: &["gs"],
+        accepts: PDF,
+        inputs: Inputs::One,
+        params: &[Param::Select {
+            key: "level",
+            label: "Version",
+            options: &[("2", "PDF/A-2b"), ("1", "PDF/A-1b"), ("3", "PDF/A-3b")],
+            default: "2",
+        }],
+        output: Output::File { suffix: "pdfa", ext: |_| "pdf".into() },
+        build: |j| {
+            let def = j.tmp.join("PDFA_def.ps");
+            vec![
+                Step::Write(def.clone(), PDFA_DEF.into()),
+                Step::Run(
+                    "gs",
+                    args![
+                        format!("-dPDFA={}", j.p("level")),
+                        // What can't comply (transparency in A-1…) is converted or dropped,
+                        // never left in to make a file that only claims to be PDF/A.
+                        "-dPDFACompatibilityPolicy=1",
+                        "-sColorConversionStrategy=RGB",
+                        "-sDEVICE=pdfwrite",
+                        "-dNOPAUSE",
+                        "-dBATCH",
+                        "-dQUIET",
+                        "-dPDFSTOPONERROR",
+                        gs_out(&j.out()),
+                        s(&def),
+                        j.input()
+                    ],
+                ),
+            ]
+        },
+    },
+    Tool {
         id: "pdf-studio",
         family: Family::Pdf,
         name: "PDF Studio",
@@ -715,3 +755,19 @@ fn sign_plan(j: &Job) -> Result<Vec<Step>, String> {
     let overlay = args![pdf, "--overlay", layer, format!("--to={}", j.p("pages")), "--from=", "--repeat=1", "--", j.out()];
     Ok(vec![Step::Run("magick", draw), Step::Run("qpdf", overlay)])
 }
+
+/// Ghostscript's lib/PDFA_def.ps, cut down: our gs builds leave lib/ out but carry the sRGB
+/// profile in their ROM. RGB is forced, hence `/N 3`. Validated with veraPDF (smoke test).
+const PDFA_DEF: &str = r"%!
+[/_objdef {icc_PDFA} /type /stream /OBJ pdfmark
+[{icc_PDFA} << /N 3 >> /PUT pdfmark
+[{icc_PDFA} (%rom%iccprofiles/srgb.icc) (r) file /PUT pdfmark
+[/_objdef {OutputIntent_PDFA} /type /dict /OBJ pdfmark
+[{OutputIntent_PDFA} <<
+  /Type /OutputIntent
+  /S /GTS_PDFA1
+  /DestOutputProfile {icc_PDFA}
+  /OutputConditionIdentifier (sRGB)
+>> /PUT pdfmark
+[{Catalog} << /OutputIntents [ {OutputIntent_PDFA} ] >> /PUT pdfmark
+";

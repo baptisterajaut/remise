@@ -171,6 +171,16 @@ fn empty_password_is_refused() {
 }
 
 #[test]
+fn pdfa_writes_its_definition_first() {
+    let steps = job("pdf-pdfa", &["/d/a.pdf"], &[("level", "1")]);
+    let [Step::Write(def, ps), Step::Run("gs", a)] = &steps[..] else { panic!("{steps:?}") };
+    assert!(ps.contains("%rom%iccprofiles/srgb.icc") && ps.contains("/OutputIntents"));
+    // The definition runs before the document, and the level is the one asked for.
+    assert_eq!(a[a.len() - 2..], [tools::s(def), "/d/a.pdf".to_string()]);
+    assert!(a.contains(&"-dPDFA=1".to_string()) && a.contains(&"-sColorConversionStrategy=RGB".to_string()), "{a:?}");
+}
+
+#[test]
 fn archive_password_goes_on_stdin() {
     for (format, flag) in [("7z", "-mhe=on"), ("zip", "-mem=AES256")] {
         let steps = job("arc-create", &["/d/a.txt"], &[("format", format), ("password", "s3cret")]);

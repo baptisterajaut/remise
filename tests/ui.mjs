@@ -222,6 +222,20 @@ async function archiveFlow(page) {
   assert.ok(saved.includes("7z") && !saved.includes("s3cret"), saved);
 }
 
+/** Newer tools: the card opens, an option sticks, and the run carries it. */
+const NEW_TOOLS = [{ card: /PDF\/A/, option: "PDF/A-1b", drop: ["/d/a.pdf"], params: { level: "1" } }];
+async function newToolsFlow(page) {
+  for (const t of NEW_TOOLS) {
+    await resetWall(page);
+    await page.getByRole("button", { name: t.card }).click();
+    await page.getByRole("button", { name: t.option, exact: true }).click();
+    await page.evaluate((paths) => window.__drop(paths), t.drop);
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await page.waitForSelector(".files li.done");
+    assert.deepEqual(await page.evaluate(() => window.__runs.at(-1).steps[0].params), t.params, String(t.card));
+  }
+}
+
 async function stopFlow(page) {
   await resetWall(page);
   await page.getByRole("button", { name: /Compress video/ }).click();
@@ -389,6 +403,7 @@ for (const scheme of ["light", "dark"]) {
   await previewFlow(page);
   await datesFlow(page);
   await archiveFlow(page);
+  await newToolsFlow(page);
   await stopFlow(page);
   await downloadFlow(page, shot);
   await busyFlow(page);
