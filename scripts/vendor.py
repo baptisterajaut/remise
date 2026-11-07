@@ -215,7 +215,9 @@ def macos(arch, riedl, ffmpeg_sha, qpdf_sha):
     ff_source = f"https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz (build recipe: {riedl_url.rsplit('/', 1)[0]})"
     return [
         Item(**QPDF, url=f"{GH}/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-macos-{qarch}.zip", sha256=qpdf_sha,
-             picks=[("**/bin/qpdf", "qpdf/bin"), ("**/lib/*.dylib", "qpdf/lib")]),
+             # Only the name qpdf links to (@rpath/libqpdf.30.dylib): the zip also holds an identical
+             # libqpdf.30.4.2.dylib, which would cost every DMG ~3 MB more.
+             picks=[("**/bin/qpdf", "qpdf/bin"), ("**/lib/libqpdf.[0-9][0-9].dylib", "qpdf/lib")]),
         Item(**SEVENZIP, url=f"{GH}/ip7z/7zip/releases/download/26.05/7z2605-mac.tar.xz",
              sha256="12ef6830317743cfd3f0ab1724bde43fcc270d8b6d8564f8c12c2a2b7f993570",
              picks=[("7zz", "7zip"), ("?License.txt", "licenses/7zip")]),
