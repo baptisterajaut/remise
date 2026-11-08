@@ -99,12 +99,13 @@ jobs:
           $jpg = remise img-convert --format jpg $qr
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $jpg)) { throw "img-convert gave: $jpg" }
           "$qr -> $jpg"
-          # A usage error exits 2. With 'Stop' (and native commands under it) that exit code would
-          # end the script, silently once stderr is sent to $null: keep both out of the way.
+          # A usage error exits 2, read without 'Stop' (and native commands under it) ending the script.
           $ErrorActionPreference = 'Continue'
           $PSNativeCommandUseErrorActionPreference = $false
           remise nope 2> nope.txt
           $code = $LASTEXITCODE
+          # Or the runner's epilogue (`exit $LASTEXITCODE`) fails the step on it after all passed.
+          $global:LASTEXITCODE = 0
           $ErrorActionPreference = 'Stop'
           if ($code -ne 2) { throw "a usage error exited with ${code}: $(Get-Content nope.txt)" }
           Pop-Location

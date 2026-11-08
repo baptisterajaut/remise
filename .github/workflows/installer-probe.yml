@@ -44,6 +44,8 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           remise nope 2> nope.txt
           $code = $LASTEXITCODE
+          # Or the runner's epilogue (`exit $LASTEXITCODE`) fails the step on it after all passed.
+          $global:LASTEXITCODE = 0
           Set-PSDebug -Off
           "C nope code=$code"
           "C stderr: $(Get-Content nope.txt -Raw)"
